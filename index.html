@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Caza de Criaturas - Zenia</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#2F6B4F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Caza Criaturas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root{
+    --paper: #F2E4C4;
+    --paper-dark: #E4D2A6;
+    --jungle: #2F6B4F;
+    --jungle-dark: #21503A;
+    --sky: #4FA8D8;
+    --coral: #FF6B4A;
+    --gold: #FFC93C;
+    --ink: #1B3A4B;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    font-family:'Nunito', sans-serif;
+    color:var(--ink);
+    background:var(--paper);
+  }
+  #app{ position:relative; height:100vh; width:100vw; display:flex; flex-direction:column; }
+
+  /* ---------- HEADER ---------- */
+  header{
+    background: linear-gradient(180deg, var(--jungle) 0%, var(--jungle-dark) 100%);
+    color:#fff;
+    padding:12px 16px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    z-index:1200;
+    box-shadow:0 3px 10px rgba(0,0,0,0.25);
+  }
+  .brand{ display:flex; align-items:center; gap:8px; }
+  .brand .icon{ font-size:26px; filter:drop-shadow(0 2px 0 rgba(0,0,0,.2)); }
+  .brand h1{
+    font-family:'Baloo 2', sans-serif;
+    font-size:19px;
+    font-weight:700;
+    margin:0;
+    letter-spacing:.3px;
+  }
+  .score-pill{
+    background:var(--gold);
+    color:var(--ink);
+    font-family:'Baloo 2', sans-serif;
+    font-weight:700;
+    font-size:14px;
+    padding:6px 12px;
+    border-radius:999px;
+    display:flex; align-items:center; gap:6px;
+    cursor:pointer;
+    border:none;
+    box-shadow:0 2px 0 #d19f16;
+    transition:transform .1s;
+  }
+  .score-pill:active{ transform:translateY(2px); box-shadow:none; }
+
+  /* ---------- MAP ---------- */
+  #map{ flex:1; z-index:1; }
+  .leaflet-container{ background:var(--paper); font-family:'Nunito', sans-serif; }
+
+  /* creature marker */
+  .creature-marker{
+    display:flex; align-items:center; justify-content:center;
+    width:44px; height:44px;
+    border-radius:50%;
+    background:#fff;
+    border:3px solid var(--jungle);
+    font-size:22px;
+    box-shadow:0 3px 6px rgba(0,0,0,.3);
+    position:relative;
+  }
+  .creature-marker.in-range{
+    border-color:var(--gold);
+    animation: pulse-ring 1.1s infinite;
+  }
+  .creature-marker.captured{
+    opacity:.35;
+    filter:grayscale(1);
+  }
+  @keyframes pulse-ring{
+    0%{ box-shadow:0 0 0 0 rgba(255,201,60,.7), 0 3px 6px rgba(0,0,0,.3); }
+    70%{ box-shadow:0 0 0 16px rgba(255,201,60,0), 0 3px 6px rgba(0,0,0,.3); }
+    100%{ box-shadow:0 0 0 0 rgba(255,201,60,0), 0 3px 6px rgba(0,0,0,.3); }
+  }
+  .player-marker{
+    width:26px; height:26px; border-radius:50%;
+    background:var(--sky);
+    border:3px solid #fff;
+    box-shadow:0 0 0 4px rgba(79,168,216,.35), 0 2px 5px rgba(0,0,0,.3);
+  }
+
+  /* ---------- BOTTOM BAR ---------- */
+  #bottom-bar{
+    position:absolute;
+    left:0; right:0; bottom:0;
+    z-index:1100;
+    padding:10px 14px calc(14px + env(safe-area-inset-bottom));
+    background:linear-gradient(0deg, var(--paper) 60%, rgba(242,228,196,0));
+    pointer-events:none;
+  }
+  #bottom-bar > *{ pointer-events:auto; }
+  .status-card{
+    background:#fff;
+    border-radius:16px;
+    padding:10px 14px;
+    box-shadow:0 4px 14px rgba(0,0,0,.18);
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:8px;
+    border:2px solid var(--paper-dark);
+  }
+  .status-card .emoji{ font-size:26px; }
+  .status-text{ flex:1; }
+  .status-text .title{ font-family:'Baloo 2',sans-serif; font-weight:700; font-size:14.5px; }
+  .status-text .sub{ font-size:12.5px; color:#5b6b6f; }
+  .catch-btn{
+    background:var(--coral);
+    color:#fff;
+    border:none;
+    font-family:'Baloo 2', sans-serif;
+    font-weight:700;
+    font-size:14px;
+    padding:9px 16px;
+    border-radius:12px;
+    box-shadow:0 3px 0 #c94f34;
+    cursor:pointer;
+  }
+  .catch-btn:active{ transform:translateY(3px); box-shadow:none; }
+
+  .controls-row{ display:flex; gap:8px; }
+  .mode-toggle{
+    flex:1;
+    background:#fff;
+    border:2px solid var(--jungle);
+    color:var(--jungle-dark);
+    font-family:'Baloo 2', sans-serif;
+    font-weight:600;
+    font-size:12.5px;
+    padding:8px 10px;
+    border-radius:12px;
+    text-align:center;
+    cursor:pointer;
+  }
+  .mode-toggle.active{ background:var(--jungle); color:#fff; }
+
+  /* ---------- COLLECTION MODAL ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(27,58,75,.55);
+    z-index:2000; display:flex; align-items:flex-end; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  .modal-overlay.open{ opacity:1; pointer-events:auto; }
+  .modal-sheet{
+    background:var(--paper);
+    width:100%; max-width:480px;
+    max-height:82vh;
+    border-radius:22px 22px 0 0;
+    padding:18px 18px calc(18px + env(safe-area-inset-bottom));
+    overflow-y:auto;
+    transform:translateY(30px);
+    transition:transform .25s;
+    border-top:4px solid var(--gold);
+  }
+  .modal-overlay.open .modal-sheet{ transform:translateY(0); }
+  .modal-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .modal-header h2{ font-family:'Baloo 2',sans-serif; font-size:20px; margin:0; color:var(--jungle-dark); }
+  .modal-header button{
+    background:none; border:none; font-size:22px; cursor:pointer; color:var(--ink);
+  }
+  .modal-sub{ font-size:13px; color:#5b6b6f; margin-bottom:14px; }
+  .progress-track{
+    height:10px; background:var(--paper-dark); border-radius:999px; overflow:hidden; margin-bottom:16px;
+  }
+  .progress-fill{ height:100%; background:linear-gradient(90deg, var(--gold), var(--coral)); border-radius:999px; transition:width .4s; }
+  .grid{
+    display:grid; grid-template-columns:repeat(4, 1fr); gap:10px;
+  }
+  .card{
+    background:#fff; border-radius:14px; padding:10px 6px;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    border:2px solid var(--paper-dark);
+  }
+  .card .cemoji{ font-size:28px; }
+  .card.locked .cemoji{ filter:grayscale(1) brightness(.6); opacity:.5; }
+  .card .cname{ font-size:10.5px; font-weight:700; text-align:center; font-family:'Baloo 2',sans-serif; color:var(--jungle-dark); }
+  .card.locked .cname{ color:#9aa4a6; }
+
+  /* ---------- CAPTURE CELEBRATION ---------- */
+  #celebrate{
+    position:fixed; inset:0; z-index:3000;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(27,58,75,.6);
+    opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  #celebrate.show{ opacity:1; pointer-events:auto; }
+  .celebrate-card{
+    background:#fff; border-radius:20px; padding:26px 30px; text-align:center;
+    transform:scale(.85); transition:transform .25s;
+    box-shadow:0 10px 30px rgba(0,0,0,.3);
+    border:3px solid var(--gold);
+  }
+  #celebrate.show .celebrate-card{ transform:scale(1); }
+  .celebrate-card .cemoji{ font-size:56px; display:block; margin-bottom:6px; animation:bounce .6s ease; }
+  @keyframes bounce{ 0%{transform:translateY(0);} 30%{transform:translateY(-18px);} 60%{transform:translateY(0);} 80%{transform:translateY(-6px);} 100%{transform:translateY(0);} }
+  .celebrate-card h3{ font-family:'Baloo 2',sans-serif; margin:4px 0; color:var(--jungle-dark); font-size:19px; }
+  .celebrate-card p{ margin:0 0 14px; font-size:13px; color:#5b6b6f; }
+  .celebrate-card button{
+    background:var(--jungle); color:#fff; border:none; font-family:'Baloo 2',sans-serif;
+    font-weight:700; padding:9px 22px; border-radius:12px; cursor:pointer; font-size:14px;
+  }
+
+  #secure-banner{
+    position:fixed; top:64px; left:12px; right:12px;
+    background:#FFF3D6; border:2px solid var(--gold);
+    border-radius:14px; padding:12px 14px;
+    z-index:1900; display:none;
+    box-shadow:0 4px 12px rgba(0,0,0,.18);
+  }
+  #secure-banner.show{ display:block; }
+  #secure-banner .title{ font-family:'Baloo 2',sans-serif; font-weight:700; font-size:13.5px; margin-bottom:4px; color:var(--ink); }
+  #secure-banner p{ margin:0 0 8px; font-size:12px; color:#5b6b6f; line-height:1.4; }
+  #secure-banner button{
+    background:var(--jungle); color:#fff; border:none; font-family:'Baloo 2',sans-serif;
+    font-weight:700; font-size:12px; padding:6px 12px; border-radius:9px; cursor:pointer;
+  }
+  .locate-btn{
+    background:var(--sky); color:#fff; border:none;
+    font-family:'Baloo 2', sans-serif; font-weight:700; font-size:12.5px;
+    padding:8px 10px; border-radius:12px; cursor:pointer; flex:1;
+  }
+  #toast{
+    position:fixed; top:70px; left:50%; transform:translateX(-50%) translateY(-10px);
+    background:var(--ink); color:#fff; padding:9px 16px; border-radius:10px;
+    font-size:12.5px; z-index:2500; opacity:0; transition:all .25s; pointer-events:none;
+    max-width:85%; text-align:center;
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <span class="icon">🗺️</span>
+      <h1>Caza en el Zenia</h1>
+    </div>
+    <button class="score-pill" id="installBtn" style="display:none;background:#fff;">⬇️ Instalar</button>
+    <button class="score-pill" id="openCollection">🎒 <span id="scoreLabel">0/8</span></button>
+  </header>
+
+  <div id="map"></div>
+
+  <div id="bottom-bar">
+    <div class="status-card" id="statusCard">
+      <div class="emoji" id="statusEmoji">🧭</div>
+      <div class="status-text">
+        <div class="title" id="statusTitle">Buscando tu ubicación…</div>
+        <div class="sub" id="statusSub">Permite el acceso a tu ubicación para empezar la aventura.</div>
+      </div>
+      <button class="catch-btn" id="catchBtn" style="display:none;">¡Atrapar!</button>
+    </div>
+    <div class="controls-row">
+      <button class="locate-btn" id="locateBtn">📍 Usar mi ubicación</button>
+      <div class="mode-toggle" id="modeToggle">🧪 Modo prueba: toca el mapa para moverte</div>
+    </div>
+  </div>
+</div>
+
+<div id="secure-banner">
+  <div class="title">⚠️ El GPS no funciona abriendo el archivo así</div>
+  <p>Tu navegador bloquea la ubicación real cuando el juego se abre como archivo local. Para que funcione: sube este HTML a un sitio con HTTPS (por ejemplo, arrastrándolo a <strong>netlify.com/drop</strong> o subiéndolo a GitHub Pages) y ábrelo desde ese enlace. Mientras tanto puedes jugar en "Modo prueba".</p>
+  <button id="dismissBanner">Entendido</button>
+</div>
+
+<div class="modal-overlay" id="collectionModal">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <h2>Mi Colección</h2>
+      <button id="closeCollection">✕</button>
+    </div>
+    <div class="modal-sub" id="collectionSub">Aún no has atrapado ninguna criatura. ¡Sal a explorar el mapa!</div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%;"></div></div>
+    <div class="grid" id="collectionGrid"></div>
+  </div>
+</div>
+
+<div id="celebrate">
+  <div class="celebrate-card">
+    <span class="cemoji" id="celEmoji">🦁</span>
+    <h3 id="celTitle">¡Atrapaste a León Dorado!</h3>
+    <p id="celSub">Una criatura más para tu colección.</p>
+    <button id="celClose">Genial</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ---------------- CONFIG ---------------- */
+const CAPTURE_RADIUS_M = 10;
+const DEFAULT_CENTER = { lat: 37.930507, lng: -0.736342 }; // Centro Comercial Zenia Boulevard, Orihuela Costa
+
+const CREATURE_DEFS = [
+  { id:1, name:'León Dorado',      emoji:'🦁' },
+  { id:2, name:'Elefante Sabio',   emoji:'🐘' },
+  { id:3, name:'Jirafa Curiosa',   emoji:'🦒' },
+  { id:4, name:'Búho Nocturno',    emoji:'🦉' },
+  { id:5, name:'Tortuga Viajera',  emoji:'🐢' },
+  { id:6, name:'Moái Misterioso',  emoji:'🗿' },
+  { id:7, name:'Dragón de Piedra', emoji:'🐉' },
+  { id:8, name:'Jarrón Antiguo',   emoji:'🏺' },
+];
+
+/* ---------------- STATE ---------------- */
+let map, playerLatLng = null, playerMarker = null, trailLine = null;
+let testMode = false;
+let watchId = null;
+let creatures = []; // {..def, lat, lng, marker, captured, inRange}
+
+/* ---------------- HELPERS ---------------- */
+function randomPointNear(center, minM, maxM){
+  const r = minM + Math.random() * (maxM - minM);
+  const theta = Math.random() * 2 * Math.PI;
+  const dx = r * Math.cos(theta);
+  const dy = r * Math.sin(theta);
+  const dLat = dy / 111320;
+  const dLng = dx / (111320 * Math.cos(center.lat * Math.PI / 180));
+  return { lat: center.lat + dLat, lng: center.lng + dLng };
+}
+
+function distanceMeters(a, b){
+  return map.distance(a, b);
+}
+
+function showToast(msg, ms=2200){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=> t.classList.remove('show'), ms);
+}
+
+/* ---------------- INIT MAP ---------------- */
+function initMap(center){
+  map = L.map('map', { zoomControl:false, attributionControl:false }).setView([center.lat, center.lng], 17);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    maxZoom: 20,
+    subdomains: 'abcd',
+    attribution: '&copy; OpenStreetMap &copy; CARTO'
+  }).addTo(map);
+  L.control.zoom({ position:'bottomright' }).addTo(map);
+
+  spawnCreatures(center);
+  setPlayerPosition(center, false);
+
+  map.on('click', (e)=>{
+    if(testMode){
+      setPlayerPosition({ lat:e.latlng.lat, lng:e.latlng.lng }, true);
+    }
+  });
+}
+
+function spawnCreatures(center){
+  creatures = CREATURE_DEFS.map(def=>{
+    const pos = randomPointNear(center, 20, 140);
+    const el = document.createElement('div');
+    el.className = 'creature-marker';
+    el.innerHTML = def.emoji;
+    const icon = L.divIcon({ html: el.outerHTML, className:'', iconSize:[44,44], iconAnchor:[22,22] });
+    const marker = L.marker([pos.lat, pos.lng], { icon }).addTo(map);
+    marker.on('click', ()=> tryCapture(def.id));
+    return { ...def, lat: pos.lat, lng: pos.lng, marker, captured:false, inRange:false };
+  });
+}
+
+function refreshCreatureIcon(c){
+  const el = document.createElement('div');
+  el.className = 'creature-marker' + (c.inRange && !c.captured ? ' in-range' : '') + (c.captured ? ' captured' : '');
+  el.innerHTML = c.emoji;
+  const icon = L.divIcon({ html: el.outerHTML, className:'', iconSize:[44,44], iconAnchor:[22,22] });
+  c.marker.setIcon(icon);
+}
+
+/* ---------------- PLAYER MOVEMENT ---------------- */
+function setPlayerPosition(pos, recenter){
+  playerLatLng = pos;
+  if(!playerMarker){
+    const el = document.createElement('div');
+    el.className = 'player-marker';
+    const icon = L.divIcon({ html: el.outerHTML, className:'', iconSize:[26,26], iconAnchor:[13,13] });
+    playerMarker = L.marker([pos.lat, pos.lng], { icon, zIndexOffset:1000 }).addTo(map);
+  } else {
+    playerMarker.setLatLng([pos.lat, pos.lng]);
+  }
+  if(recenter) map.panTo([pos.lat, pos.lng]);
+  updateProximity();
+}
+
+function updateProximity(){
+  if(!playerLatLng) return;
+  let nearest = null, nearestDist = Infinity;
+  let inRangeCreature = null;
+
+  creatures.forEach(c=>{
+    if(c.captured) return;
+    const d = distanceMeters(playerLatLng, { lat:c.lat, lng:c.lng });
+    const wasInRange = c.inRange;
+    c.inRange = d <= CAPTURE_RADIUS_M;
+    if(c.inRange !== wasInRange) refreshCreatureIcon(c);
+    if(c.inRange) inRangeCreature = c;
+    if(d < nearestDist){ nearestDist = d; nearest = c; }
+  });
+
+  // trail line to nearest uncaptured creature
+  if(trailLine){ map.removeLayer(trailLine); trailLine = null; }
+  if(nearest){
+    trailLine = L.polyline([[playerLatLng.lat, playerLatLng.lng],[nearest.lat, nearest.lng]], {
+      color:'#2F6B4F', weight:2, dashArray:'6,8', opacity:.6
+    }).addTo(map);
+  }
+
+  updateStatusCard(inRangeCreature, nearest, nearestDist);
+}
+
+function updateStatusCard(inRangeCreature, nearest, nearestDist){
+  const emojiEl = document.getElementById('statusEmoji');
+  const titleEl = document.getElementById('statusTitle');
+  const subEl = document.getElementById('statusSub');
+  const btn = document.getElementById('catchBtn');
+
+  const remaining = creatures.filter(c=>!c.captured).length;
+  if(remaining === 0){
+    emojiEl.textContent = '🏆';
+    titleEl.textContent = '¡Las atrapaste todas!';
+    subEl.textContent = 'Abre tu colección para verlas.';
+    btn.style.display = 'none';
+    return;
+  }
+
+  if(inRangeCreature){
+    emojiEl.textContent = inRangeCreature.emoji;
+    titleEl.textContent = '¡' + inRangeCreature.name + ' está cerca!';
+    subEl.textContent = 'Toca "¡Atrapar!" antes de que se escape.';
+    btn.style.display = 'inline-block';
+    btn.onclick = ()=> tryCapture(inRangeCreature.id);
+  } else if(nearest){
+    emojiEl.textContent = '🧭';
+    titleEl.textContent = nearest.name + ' está a ' + Math.round(nearestDist) + ' m';
+    subEl.textContent = testMode ? 'Toca el mapa para acercarte.' : 'Camina para acercarte a la criatura.';
+    btn.style.display = 'none';
+  }
+}
+
+/* ---------------- CAPTURE ---------------- */
+function tryCapture(id){
+  const c = creatures.find(x=>x.id===id);
+  if(!c || c.captured) return;
+  if(!c.inRange){
+    showToast('Acércate un poco más para atraparla 🚶');
+    return;
+  }
+  c.captured = true;
+  refreshCreatureIcon(c);
+  updateProximity();
+  updateScore();
+  celebrate(c);
+}
+
+function celebrate(c){
+  document.getElementById('celEmoji').textContent = c.emoji;
+  document.getElementById('celTitle').textContent = '¡Atrapaste a ' + c.name + '!';
+  document.getElementById('celSub').textContent = 'Una criatura más para tu colección.';
+  document.getElementById('celebrate').classList.add('show');
+}
+
+document.getElementById('celClose').addEventListener('click', ()=>{
+  document.getElementById('celebrate').classList.remove('show');
+});
+
+function updateScore(){
+  const total = creatures.length;
+  const got = creatures.filter(c=>c.captured).length;
+  document.getElementById('scoreLabel').textContent = got + '/' + total;
+  renderCollection();
+}
+
+/* ---------------- COLLECTION MODAL ---------------- */
+function renderCollection(){
+  const grid = document.getElementById('collectionGrid');
+  const total = creatures.length;
+  const got = creatures.filter(c=>c.captured).length;
+  document.getElementById('progressFill').style.width = Math.round((got/total)*100) + '%';
+  document.getElementById('collectionSub').textContent = got === 0
+    ? 'Aún no has atrapado ninguna criatura. ¡Sal a explorar el mapa!'
+    : got === total
+      ? '¡Colección completa! Eres un gran explorador.'
+      : 'Llevas ' + got + ' de ' + total + ' criaturas. ¡Sigue explorando!';
+
+  grid.innerHTML = '';
+  creatures.forEach(c=>{
+    const card = document.createElement('div');
+    card.className = 'card' + (c.captured ? '' : ' locked');
+    card.innerHTML = '<div class="cemoji">' + (c.captured ? c.emoji : '❔') + '</div>' +
+                      '<div class="cname">' + (c.captured ? c.name : '???') + '</div>';
+    grid.appendChild(card);
+  });
+}
+
+document.getElementById('openCollection').addEventListener('click', ()=>{
+  document.getElementById('collectionModal').classList.add('open');
+});
+document.getElementById('closeCollection').addEventListener('click', ()=>{
+  document.getElementById('collectionModal').classList.remove('open');
+});
+
+/* ---------------- MODE TOGGLE ---------------- */
+document.getElementById('modeToggle').addEventListener('click', ()=>{
+  testMode = !testMode;
+  const el = document.getElementById('modeToggle');
+  el.classList.toggle('active', testMode);
+  el.textContent = testMode ? '🧪 Modo prueba activo: toca el mapa para moverte' : '🧪 Activar modo prueba (mover tocando el mapa)';
+  if(testMode && watchId !== null){
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  } else if(!testMode){
+    startWatching();
+  }
+});
+
+/* ---------------- GEOLOCATION ---------------- */
+function geoErrorMessage(err){
+  if(!err) return 'No pudimos acceder a tu ubicación.';
+  switch(err.code){
+    case 1: return 'Bloqueaste el permiso de ubicación. Actívalo en los ajustes del navegador para este sitio.';
+    case 2: return 'Tu ubicación no está disponible ahora mismo (sin señal GPS).';
+    case 3: return 'Tardó demasiado en encontrar tu ubicación. Inténtalo de nuevo al aire libre.';
+    default: return 'No pudimos acceder a tu ubicación.';
+  }
+}
+
+function enableTestModeFallback(){
+  testMode = true;
+  const el = document.getElementById('modeToggle');
+  el.classList.add('active');
+  el.textContent = '🧪 Modo prueba activo: toca el mapa para moverte';
+}
+
+function startWatching(){
+  if(!navigator.geolocation) return;
+  if(watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = navigator.geolocation.watchPosition(
+    (pos)=> setPlayerPosition({ lat:pos.coords.latitude, lng:pos.coords.longitude }, true),
+    (err)=> showToast(geoErrorMessage(err)),
+    { enableHighAccuracy:true, maximumAge:2000, timeout:10000 }
+  );
+}
+
+function requestRealLocation(){
+  if(!navigator.geolocation){
+    showToast('Este navegador no soporta ubicación. Usa el modo prueba.');
+    return;
+  }
+  showToast('Buscando tu ubicación…', 1500);
+  navigator.geolocation.getCurrentPosition(
+    (pos)=>{
+      const real = { lat:pos.coords.latitude, lng:pos.coords.longitude };
+      testMode = false;
+      document.getElementById('modeToggle').classList.remove('active');
+      document.getElementById('modeToggle').textContent = '🧪 Activar modo prueba (mover tocando el mapa)';
+      if(!map){ initMap(DEFAULT_CENTER); updateScore(); }
+      setPlayerPosition(real, true);
+      startWatching();
+      showToast('¡Ubicación encontrada! 📍', 1800);
+    },
+    (err)=> showToast(geoErrorMessage(err), 3200),
+    { enableHighAccuracy:true, timeout:10000 }
+  );
+}
+
+document.getElementById('locateBtn').addEventListener('click', requestRealLocation);
+document.getElementById('dismissBanner').addEventListener('click', ()=>{
+  document.getElementById('secure-banner').classList.remove('show');
+});
+
+function boot(){
+  // Las criaturas y el mapa siempre arrancan en el Zenia Boulevard, sin importar dónde esté el jugador.
+  initMap(DEFAULT_CENTER);
+  updateScore();
+
+  if(!window.isSecureContext){
+    // La API de ubicación no funciona en file:// ni en HTTP sin cifrar.
+    document.getElementById('secure-banner').classList.add('show');
+    enableTestModeFallback();
+    return;
+  }
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      (pos)=>{
+        const real = { lat:pos.coords.latitude, lng:pos.coords.longitude };
+        setPlayerPosition(real, true);
+        startWatching();
+      },
+      (err)=>{
+        showToast(geoErrorMessage(err) + ' Activamos el modo prueba 🧪', 3200);
+        enableTestModeFallback();
+      },
+      { enableHighAccuracy:true, timeout:10000 }
+    );
+  } else {
+    enableTestModeFallback();
+  }
+}
+
+boot();
+
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  document.getElementById('installBtn').style.display = 'inline-flex';
+});
+document.getElementById('installBtn').addEventListener('click', async ()=>{
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  document.getElementById('installBtn').style.display = 'none';
+});
+window.addEventListener('appinstalled', ()=>{
+  document.getElementById('installBtn').style.display = 'none';
+  showToast('¡Instalada! Ábrela desde el icono de tu pantalla de inicio 🎉');
+});
+
+if('serviceWorker' in navigator && window.isSecureContext){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
