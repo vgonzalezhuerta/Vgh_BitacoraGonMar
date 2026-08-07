@@ -241,6 +241,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
   <button class="tb-btn" id="btn-pdf" onclick="generatePDF()" style="display:none">📄 PDF</button>
   <button class="tb-btn" id="btn-zip" onclick="exportZip()" style="display:none">⬇ Copia</button>
   <button class="tb-btn" id="btn-install" onclick="installApp()" style="display:none">⬛ Instalar</button>
+  <button class="tb-btn" id="btn-retry" onclick="retryPending()" title="Reintentar imágenes que faltan" style="display:none">↻</button>
   <button class="tb-btn" id="btn-cache" onclick="cacheClear()" title="Vaciar caché de imágenes">🧹</button>
   <span class="tb-status" id="status"></span>
 </div>
@@ -295,6 +296,7 @@ let tripDir = null;         // carpeta del viaje abierto
 let D = null;               // JSON del viaje abierto
 let urls = {};              // clave -> objectURL de la miniatura
 let fullUrls = {};          // clave -> objectURL a tamaño completo (bajo demanda)
+let pending = [];           // imágenes que no se pudieron leer
 let saveTimer = null;
 
 const el = id => document.getElementById(id);
@@ -352,17 +354,22 @@ async function ensurePermission(handle, mode = 'readwrite') {
 }
 
 /* ─── CARPETA RAÍZ Y ESCANEO DE VIAJES ─── */
+let pickerBusy = false;
 async function pickRoot() {
   if (!('showDirectoryPicker' in window)) {
     status('Este navegador no permite abrir carpetas. Usa Chrome o Edge en ordenador.', true); return;
   }
+  if (pickerBusy) { status('Ya hay un selector de carpetas abierto'); return; }
+  pickerBusy = true;
   try {
     rootHandle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'bitacoras', startIn: 'documents' });
     await rememberRoot(rootHandle);
     el('btn-root').textContent = '📁 ' + rootHandle.name;
     el('btn-root').classList.add('connected');
     await scanTrips(); showLibrary();
-  } catch (e) { if (e.name !== 'AbortError') status('No se pudo abrir la carpeta: ' + e.message, true); }
+  } catch (e) {
+    if (e.name !== 'AbortError') status('No se pudo abrir la carpeta: ' + e.message, true);
+  } finally { pickerBusy = false; }
 }
 
 async function scanTrips() {
@@ -475,7 +482,8 @@ async function openTrip(i) {
 
     if (!Array.isArray(D.days) || !D.days.length) { renderOldFormat(t); return; }
 
-    urls = {}; fullUrls = {};
+    urls = {}; fullUrls = {}; pending = [];
+    el('btn-retry').style.display = 'none';
     renderTrip();
     if (window.scrollTo) window.scrollTo(0, 0);
     loadMedia().catch(e => { console.error(e); status('Las imágenes no se han podido cargar: ' + (e.message || e), true); });
@@ -628,32 +636,75 @@ async function loadMedia() {
   const missing = jobs.filter((_, i) => !cached[i]);
   if (!missing.length) { status('✓ Viaje abierto'); return; }
 
-  // 2) Lo que falta: se lee del disco una sola vez y queda cacheado
+  // 2) Lo que falta: se lee del disco una sola vez y queda cacheado.
+  //    De dos en dos como mucho: los proveedores de archivos en la nube
+  //    (Drive en Android) sirven de uno en uno y con más peticiones caducan.
   status(`Preparando ${missing.length} imágenes (solo esta vez)…`);
-  let done = 0, failed = 0;
-  const withTimeout = p => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('tiempo agotado')), 15000))]);
+  let done = 0;
 
-  for (let i = 0; i < missing.length; i += 4) {
+  pending = [];
+  for (let i = 0; i < missing.length; i += 2) {
     if (D !== data) return;
-    await Promise.all(missing.slice(i, i + 4).map(async ([name, key, big]) => {
-      try {
-        const fh = await withTimeout(dir.getFileHandle(name));
-        const file = await withTimeout(fh.getFile());
-        const max = thumbSize(big);
-        const thumb = await compressImage(file, max, max, thumbQuality());
-        urls[key] = URL.createObjectURL(thumb);
-        await cacheSet(name, thumb);
-      } catch (_) { failed++; }
-      done++;
-    }));
+    const lote = missing.slice(i, i + 2);
+    const res = await Promise.all(lote.map(readPending));
+    res.forEach((ok, k) => { if (!ok) pending.push(lote[k]); });
+    done += lote.length;
     status(`Preparando imágenes… ${done}/${missing.length}`);
+    if (done % 10 === 0) refreshImages();               // se van viendo sin esperar al final
   }
   if (D !== data) return;
+  const failed = pending.length;
   renderTrip();
-  if (failed) status(`✓ Listo · ${failed} imagen(es) no encontradas en la carpeta`, true);
+  el('btn-retry').style.display = failed ? '' : 'none';
+  if (failed) status(`✓ Listo · faltan ${failed} imagen(es) — pulsa ↻ para reintentarlas`, true);
   else if (cacheMode === 'none') status('✓ Listo · este navegador no deja guardar caché aquí', true);
   else if (cacheFull) status('✓ Listo · caché llena: algunas se releerán cada vez', true);
   else status('✓ Listo — la próxima vez abrirá al instante');
+}
+
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('tiempo agotado')), ms))]);
+
+// Lee un archivo de la carpeta y guarda su miniatura. Hasta 3 intentos, con más margen cada vez.
+async function readPending([name, key, big]) {
+  for (let intento = 1; intento <= 3; intento++) {
+    try {
+      const ms = 20000 * intento;
+      const fh = await withTimeout(tripDir.getFileHandle(name), ms);
+      const file = await withTimeout(fh.getFile(), ms);
+      const max = thumbSize(big);
+      const thumb = await compressImage(file, max, max, thumbQuality());
+      urls[key] = URL.createObjectURL(thumb);
+      await cacheSet(name, thumb);
+      return true;
+    } catch (_) {
+      if (intento < 3) await new Promise(r => setTimeout(r, 400 * intento));
+    }
+  }
+  return false;
+}
+
+// Repinta solo las miniaturas ya disponibles, sin reconstruir la página entera
+function refreshImages() {
+  (D.days || []).forEach((d, i) => {
+    renderPhotos(i);
+    (d.hunt?.items || []).forEach((_, j) => renderStatue(i, j));
+  });
+}
+
+// Reintenta las imágenes que se quedaron sin cargar
+async function retryPending() {
+  if (!pending.length) { status('No queda ninguna pendiente'); return; }
+  const data = D, lista = pending.slice();
+  status(`Reintentando ${lista.length} imágenes…`);
+  pending = [];
+  for (const job of lista) {
+    if (D !== data) return;
+    const ok = await readPending(job);
+    if (!ok) pending.push(job);
+  }
+  refreshImages();
+  el('btn-retry').style.display = pending.length ? '' : 'none';
+  status(pending.length ? `Siguen faltando ${pending.length}. ¿Están en la carpeta del viaje?` : '✓ Ya están todas', !!pending.length);
 }
 
 /* La foto a tamaño completo solo se lee del disco al ampliarla */
@@ -1238,8 +1289,19 @@ window.addEventListener('unhandledrejection', e => {
         el('btn-root').textContent = '📁 Reconectar ' + saved.name;
         el('btn-root').removeAttribute('onclick');
         el('btn-root').onclick = async () => {
-          if (await ensurePermission(saved)) { rootHandle = saved; await scanTrips(); el('btn-root').onclick = pickRoot; showLibrary(); }
-          else pickRoot();
+          if (pickerBusy) return;
+          pickerBusy = true;
+          let ok = false;
+          try { ok = await ensurePermission(saved); } catch (_) {} finally { pickerBusy = false; }
+          if (ok) {
+            rootHandle = saved; await scanTrips();
+            el('btn-root').onclick = pickRoot;
+            showLibrary();
+          } else {
+            status('Permiso no concedido. Pulsa otra vez para elegir la carpeta a mano.', true);
+            el('btn-root').textContent = '📁 Elegir carpeta';
+            el('btn-root').onclick = pickRoot;
+          }
         };
       }
     } catch (_) {}
