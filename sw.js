@@ -1,24 +1,52 @@
-const CACHE_NAME = 'caza-criaturas-v1';
-const ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
+/* Bitácoras de viaje — service worker
+   Guarda la app y sus librerías para que funcione sin conexión.
+   Sube VERSION cada vez que cambies index.html. */
+const VERSION = 'bitacoras-v3';
+const SHELL = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './icono-192.png',
+  './icono-512.png',
+  './icono-maskable-512.png'
+];
+// Librerías y tipografías: se guardan la primera vez que se cargan con conexión
+const EXTERNOS = ['unpkg.com', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com', 'tile.openstreetmap.org'];
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-  );
-  self.skipWaiting();
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(VERSION)
+    .then(c => Promise.allSettled(SHELL.map(u => c.add(u))))
+    .then(() => self.skipWaiting()));
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys()
+    .then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k))))
+    .then(() => self.clients.claim()));
 });
 
-self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
-  );
+self.addEventListener('fetch', e => {
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  const externo = EXTERNOS.some(h => url.hostname.endsWith(h));
+
+  if (externo) {
+    // Librerías, tipografías y teselas del mapa: primero la caché, y se refresca por detrás
+    e.respondWith(caches.match(req).then(hit => {
+      const red = fetch(req).then(res => {
+        if (res && (res.ok || res.type === 'opaque')) caches.open(VERSION).then(c => c.put(req, res.clone()));
+        return res;
+      }).catch(() => hit);
+      return hit || red;
+    }));
+    return;
+  }
+
+  if (url.origin !== location.origin) return;
+  // La propia app: primero la red para tener siempre la última versión, con la caché de respaldo
+  e.respondWith(fetch(req).then(res => {
+    if (res && res.ok) caches.open(VERSION).then(c => c.put(req, res.clone()));
+    return res;
+  }).catch(() => caches.match(req).then(hit => hit || caches.match('./index.html'))));
 });

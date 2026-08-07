@@ -1,0 +1,9 @@
+Guarda aquí estos tres archivos para que la app funcione sin conexión.
+Ábrelos en el navegador y usa "Descargar" o "Guardar página":
+
+  leaflet.css     https://unpkg.com/leaflet@1.9.4/dist/leaflet.css
+  leaflet.js      https://unpkg.com/leaflet@1.9.4/dist/leaflet.js
+  jszip.min.js    https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js
+
+Los nombres deben ser exactamente esos. Si esta carpeta está vacía,
+la app los descarga de internet y todo sigue funcionando con conexión.
