@@ -218,6 +218,37 @@ textarea:focus{outline:none;border-color:var(--accent)}
   text-align:center;padding:.4rem;font-size:.8rem;border-top:2px solid var(--accent);backdrop-filter:blur(6px)}
 .score-bar .sc{font-weight:900;color:#fff}
 
+
+/* ───── MOMENTOS ───── */
+.tabs{display:flex;gap:.4rem;justify-content:center;margin:0 0 1.2rem}
+.tab{background:#123a5e;color:#a8cce0;border:1px solid #2a5f8a;border-radius:20px;padding:.35rem .95rem;font-size:.82rem}
+.tab.on{background:var(--accent);color:#1a1208;border-color:var(--accent2);font-weight:700}
+.tb-btn.big{display:block;margin:0 auto 1.2rem;padding:.6rem 1.2rem;font-size:.9rem}
+.mom-list{display:grid;gap:.9rem}
+.mom-card{background:var(--paper);border:3px solid var(--line);border-radius:12px;padding:.9rem;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.mom-date{font-family:var(--display);font-size:1.15rem;color:var(--panel);line-height:1.2}
+.mom-text{font-size:.92rem;margin:.4rem 0;white-space:pre-wrap}
+.mom-photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:.4rem;margin:.5rem 0}
+.mom-thumb{aspect-ratio:1;border-radius:8px;overflow:hidden;border:2px solid #d9c99f;background:#fff8ea}
+.mom-thumb img{width:100%;height:100%;object-fit:cover;cursor:pointer}
+.mom-actions{display:flex;gap:.4rem;justify-content:flex-end;margin-top:.5rem}
+.mom-actions .tb-btn{background:#e6dbc0;color:var(--panel);border-color:#c9b98f}
+.chips{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.3rem}
+.chip{background:var(--panel);color:var(--accent2);border-radius:14px;padding:.15rem .6rem;font-size:.78rem;display:inline-flex;align-items:center;gap:.3rem}
+.chip button{background:none;border:none;color:inherit;font-size:.75rem;padding:0;opacity:.75}
+.chip button:hover{opacity:1}
+.fld{display:block;font-weight:700;color:var(--panel);font-size:.85rem;margin-bottom:.9rem}
+.fld input[type=text],.fld input[type=datetime-local],.fld textarea,.fld select{
+  width:100%;margin-top:.25rem;border:2px solid #d9c99f;border-radius:8px;padding:.5rem;
+  font-family:inherit;font-size:.9rem;background:#fff;color:var(--ink);font-weight:400}
+.fld textarea{min-height:100px;resize:vertical}
+.row{display:flex;gap:.4rem;margin-top:.4rem;align-items:center;flex-wrap:wrap}
+.row.end{justify-content:flex-end;margin-top:1rem}
+.row select,.row input{flex:1;min-width:120px;border:2px solid #d9c99f;border-radius:8px;padding:.45rem;
+  font-family:inherit;font-size:.85rem;background:#fff;font-weight:400}
+.muted{color:#7a6a52;font-size:.82rem;font-weight:400}
+.photo-thumb .ph{width:100%;height:100%;background:#efe4cb}
+
 /* ───── LIGHTBOX ───── */
 .lightbox{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:1rem}
 .lightbox.open{display:flex}
@@ -410,8 +441,9 @@ async function showLibrary() {
 
   if (!tripHandles.length) {
     el('app').innerHTML = `<div class="library">
-      <div class="lib-title">${esc(rootHandle.name)}</div>
-      <div class="lib-sub">Ningún viaje encontrado todavía</div>
+      <div class="lib-title">Bitácoras</div>
+      ${tabs('viajes')}
+      <div class="lib-sub">Ningún viaje encontrado en ${esc(rootHandle.name)}</div>
       <div class="lib-empty">
         <h2>Aún no hay bitácoras aquí</h2>
         <p>Crea una subcarpeta por viaje y pon dentro su <code>bitacora.json</code>. Vuelve y pulsa Actualizar.</p>
@@ -442,7 +474,8 @@ async function showLibrary() {
   }).join('');
 
   el('app').innerHTML = `<div class="library">
-    <div class="lib-title">Bitácoras de viaje</div>
+    <div class="lib-title">Bitácoras</div>
+    ${tabs('viajes')}
     <div class="lib-sub">${tripHandles.length} viaje${tripHandles.length > 1 ? 's' : ''} en ${esc(rootHandle.name)} · <a href="#" onclick="refreshLibrary();return false" style="color:#a8cce0">actualizar</a></div>
     <div class="trip-grid">${cards}</div></div>`;
 
@@ -460,6 +493,268 @@ async function showLibrary() {
 }
 
 async function refreshLibrary() { if (rootHandle) { await scanTrips(); showLibrary(); } }
+
+
+/* ══════════════════════════════════════════════════════════
+   MOMENTOS — instantes sueltos, fuera de los viajes
+   Se guardan en <carpeta raíz>/Momentos/momentos.json
+   ══════════════════════════════════════════════════════════ */
+let momDir = null;      // carpeta Momentos
+let M = null;           // { people: [], moments: [] }
+let momDraft = null;    // momento en edición
+let momUrls = {};       // archivo -> objectURL de su miniatura
+
+function tabs(active) {
+  const t = (id, icon, label) => `<button class="tab ${active === id ? 'on' : ''}" onclick="${id === 'viajes' ? 'showLibrary()' : 'showMoments()'}">${icon} ${label}</button>`;
+  return `<div class="tabs">${t('viajes', '🧭', 'Viajes')}${t('momentos', '✨', 'Momentos')}</div>`;
+}
+
+async function loadMoments() {
+  if (M) return M;
+  momDir = await rootHandle.getDirectoryHandle('Momentos', { create: true });
+  try {
+    const fh = await momDir.getFileHandle('momentos.json');
+    M = JSON.parse(await (await fh.getFile()).text());
+  } catch (_) { M = { schemaVersion: 1, people: [], moments: [] }; }
+  if (!Array.isArray(M.people)) M.people = [];
+  if (!Array.isArray(M.moments)) M.moments = [];
+  return M;
+}
+
+async function saveMoments() {
+  if (!await ensurePermission(momDir)) { status('Sin permiso de escritura', true); return false; }
+  await writeFile('momentos.json', new Blob([JSON.stringify(M, null, 2)], { type: 'application/json' }), momDir);
+  return true;
+}
+
+const fmtDate = iso => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+/* ─── LISTA ─── */
+async function showMoments() {
+  tripDir = null; D = null; momDraft = null;
+  applyTheme('crucero');
+  el('btn-pdf').style.display = el('btn-zip').style.display = 'none';
+  el('btn-library').style.display = 'none';
+  el('score-bar').style.display = 'none';
+
+  if (!rootHandle) { showLibrary(); return; }
+  await loadMoments();
+
+  const lista = M.moments.slice().sort((a, b) => (b.datetime || '').localeCompare(a.datetime || ''));
+  const cuerpo = lista.length ? lista.map(m => {
+    const gente = (m.people || []).map(p => `<span class="chip">${esc(p)}</span>`).join('');
+    const fotos = (m.photos || []).map(f => `<div class="mom-thumb" id="mt-${esc(m.id)}-${esc(f)}"></div>`).join('');
+    return `<div class="mom-card">
+      <div class="mom-date">${esc(fmtDate(m.datetime))}</div>
+      ${m.text ? `<div class="mom-text">${esc(m.text)}</div>` : ''}
+      ${fotos ? `<div class="mom-photos">${fotos}</div>` : ''}
+      ${gente ? `<div class="chips">${gente}</div>` : ''}
+      <div class="mom-actions">
+        <button class="tb-btn" onclick="editMoment('${esc(m.id)}')">✎ Editar</button>
+        <button class="tb-btn" onclick="deleteMoment('${esc(m.id)}')">🗑 Borrar</button>
+      </div></div>`;
+  }).join('') : `<div class="lib-empty"><h2>Aún no hay momentos</h2>
+      <p>Guarda aquí instantes sueltos: una cena, un primer diente, una tarde cualquiera que merece recordarse.</p></div>`;
+
+  el('app').innerHTML = `<div class="library">
+    <div class="lib-title">Bitácoras</div>
+    ${tabs('momentos')}
+    <div class="lib-sub">${M.moments.length} momento${M.moments.length === 1 ? '' : 's'} guardado${M.moments.length === 1 ? '' : 's'}</div>
+    <button class="tb-btn primary big" onclick="newMoment()">✨ Nuevo momento</button>
+    <div class="mom-list">${cuerpo}</div></div>`;
+
+  for (const m of lista) for (const f of (m.photos || [])) {
+    const box = el(`mt-${m.id}-${f}`);
+    if (!box) continue;
+    let src = momUrls[f] || await cacheGet(f, 'Momentos');
+    if (!src) {
+      try {
+        const file = await (await momDir.getFileHandle(f)).getFile();
+        const max = thumbSize(false);
+        const thumb = await compressImage(file, max, max, thumbQuality());
+        src = URL.createObjectURL(thumb);
+        await cacheSet(f, thumb, 'Momentos');
+      } catch (_) { continue; }
+    }
+    momUrls[f] = src;
+    box.innerHTML = `<img src="${src}" alt="" loading="lazy" onclick="openMomentPhoto('${esc(f)}')">`;
+  }
+}
+
+async function openMomentPhoto(file) {
+  const img = el('lightbox-img');
+  img.src = momUrls[file] || '';
+  el('lightbox').classList.add('open');
+  try {
+    const full = URL.createObjectURL(await (await momDir.getFileHandle(file)).getFile());
+    if (el('lightbox').classList.contains('open')) img.src = full;
+  } catch (_) {}
+}
+
+/* ─── FORMULARIO ─── */
+function nowLocalISO() {
+  const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+  return d.toISOString().slice(0, 16);
+}
+
+function newMoment() {
+  momDraft = { id: 'm' + Date.now(), datetime: nowLocalISO(), text: '', people: [], photos: [] };
+  renderMomentForm(true);
+}
+
+function editMoment(id) {
+  const m = M.moments.find(x => x.id === id);
+  if (!m) return;
+  momDraft = JSON.parse(JSON.stringify(m));
+  if (!Array.isArray(momDraft.people)) momDraft.people = [];
+  if (!Array.isArray(momDraft.photos)) momDraft.photos = [];
+  renderMomentForm(false);
+}
+
+function renderMomentForm(esNuevo) {
+  const d = momDraft;
+  const opciones = M.people.filter(p => !d.people.includes(p));
+  el('app').innerHTML = `<div class="library">
+    <div class="lib-title">${esNuevo ? 'Nuevo momento' : 'Editar momento'}</div>
+    <div class="panel">
+      <label class="fld">Fecha y hora
+        <input type="datetime-local" id="mom-dt" value="${esc(d.datetime)}"></label>
+
+      <label class="fld">¿Qué pasó?
+        <textarea id="mom-text" placeholder="Cuenta el momento: qué, dónde, por qué merece recordarse…">${esc(d.text || '')}</textarea></label>
+
+      <div class="fld">Personas
+        <div class="chips" id="mom-people">${d.people.map(p =>
+          `<span class="chip">${esc(p)}<button onclick="removePerson('${esc(p)}')" title="Quitar">✕</button></span>`).join('') || '<span class="muted">Nadie todavía</span>'}</div>
+        <div class="row">
+          <select id="mom-sel" onchange="addPersonFromList(this.value)">
+            <option value="">Añadir de la lista…</option>
+            ${opciones.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}
+          </select>
+          <input type="text" id="mom-new" placeholder="Nombre nuevo" onkeydown="if(event.key==='Enter'){addNewPerson();event.preventDefault()}">
+          <button class="tb-btn" onclick="addNewPerson()">+</button>
+        </div>
+      </div>
+
+      <div class="fld">Fotos
+        <div class="photo-grid" id="mom-fotos"></div></div>
+
+      <div class="row end">
+        <button class="tb-btn" onclick="showMoments()">Cancelar</button>
+        <button class="tb-btn primary" onclick="saveMoment()">Guardar momento</button>
+      </div>
+    </div></div>`;
+  renderDraftPhotos();
+}
+
+function syncDraft() {
+  if (!momDraft) return;
+  const dt = el('mom-dt'), tx = el('mom-text');
+  if (dt && dt.value) momDraft.datetime = dt.value;
+  if (tx) momDraft.text = tx.value;
+}
+
+function addPersonFromList(name) {
+  if (!name) return;
+  syncDraft();
+  if (!momDraft.people.includes(name)) momDraft.people.push(name);
+  renderMomentForm(false);
+}
+
+function addNewPerson() {
+  const inp = el('mom-new');
+  const name = (inp.value || '').trim();
+  if (!name) return;
+  syncDraft();
+  if (!M.people.some(p => p.toLowerCase() === name.toLowerCase())) {
+    M.people.push(name);
+    M.people.sort((a, b) => a.localeCompare(b, 'es'));
+  }
+  if (!momDraft.people.includes(name)) momDraft.people.push(name);
+  renderMomentForm(false);
+}
+
+function removePerson(name) {
+  syncDraft();
+  momDraft.people = momDraft.people.filter(p => p !== name);
+  renderMomentForm(false);
+}
+
+function renderDraftPhotos() {
+  const grid = el('mom-fotos');
+  if (!grid) return;
+  grid.innerHTML = (momDraft.photos || []).map(f =>
+    `<div class="photo-thumb">${momUrls[f] ? `<img src="${momUrls[f]}" alt="">` : '<div class="ph"></div>'}
+      <button class="del-btn" onclick="removeDraftPhoto('${esc(f)}')">✕</button></div>`).join('')
+    + `<button class="add-photo" onclick="addMomentPhotos()"><span style="font-size:1.4rem">＋</span>Añadir</button>`;
+}
+
+function addMomentPhotos() {
+  const input = el('photo-input');
+  input.value = '';
+  input.onchange = async () => {
+    if (!input.files.length) return;
+    syncDraft();
+    if (!await ensurePermission(momDir)) { status('Sin permiso de escritura', true); return; }
+    status('Guardando fotos…');
+    for (const file of input.files) {
+      try {
+        const blob = await compressImage(file, 1400, 1400, 0.78);
+        const name = `momento_${momDraft.id}_${momDraft.photos.length}_${Date.now()}.jpg`;
+        await writeFile(name, blob, momDir);
+        const max = thumbSize(false);
+        const thumb = await compressImage(blob, max, max, thumbQuality());
+        momUrls[name] = URL.createObjectURL(thumb);
+        await cacheSet(name, thumb, 'Momentos');
+        momDraft.photos.push(name);
+      } catch (e) { status('Una foto no se pudo guardar: ' + e.message, true); }
+    }
+    renderDraftPhotos();
+    status('✓ Fotos añadidas');
+  };
+  input.click();
+}
+
+function removeDraftPhoto(file) {
+  syncDraft();
+  momDraft.photos = momDraft.photos.filter(f => f !== file);
+  cacheDel(file, 'Momentos');
+  if (momDir) momDir.removeEntry(file).catch(() => {});
+  delete momUrls[file];
+  renderDraftPhotos();
+}
+
+async function saveMoment() {
+  syncDraft();
+  if (!momDraft.datetime) { status('Falta la fecha', true); return; }
+  if (!momDraft.text && !momDraft.photos.length) { status('Escribe algo o añade una foto', true); return; }
+  const i = M.moments.findIndex(x => x.id === momDraft.id);
+  if (i >= 0) M.moments[i] = momDraft; else M.moments.push(momDraft);
+  const ok = await saveMoments();
+  momDraft = null;
+  await showMoments();
+  if (ok) status('✓ Momento guardado');
+}
+
+async function deleteMoment(id) {
+  const m = M.moments.find(x => x.id === id);
+  if (!m) return;
+  if (!confirm('¿Borrar este momento? También se borrarán sus fotos.')) return;
+  for (const f of (m.photos || [])) {
+    cacheDel(f, 'Momentos');
+    try { await momDir.removeEntry(f); } catch (_) {}
+    delete momUrls[f];
+  }
+  M.moments = M.moments.filter(x => x.id !== id);
+  await saveMoments();
+  await showMoments();
+  status('Momento borrado');
+}
 
 /* ─── TEMA ─── */
 function applyTheme(name) {
@@ -571,8 +866,8 @@ const blobToDataURL = blob => new Promise((res, rej) => {
 const thumbSize = big => cacheMode === 'ls' ? (big ? 640 : 260) : (big ? 1200 : 420);
 const thumbQuality = () => cacheMode === 'ls' ? 0.62 : 0.75;
 
-async function cacheGet(name) {
-  const key = thumbKey(name);
+async function cacheGet(name, dirName) {
+  const key = thumbKey(name, dirName);
   try {
     if (cacheMode === 'idb') {
       const b = await idbGet('thumbs', key);
@@ -583,8 +878,8 @@ async function cacheGet(name) {
   return null;
 }
 
-async function cacheSet(name, blob) {
-  const key = thumbKey(name);
+async function cacheSet(name, blob, dirName) {
+  const key = thumbKey(name, dirName);
   try {
     if (cacheMode === 'idb') { await idbSet('thumbs', key, blob); return; }
     if (cacheMode === 'ls') {
@@ -596,8 +891,8 @@ async function cacheSet(name, blob) {
   }
 }
 
-function cacheDel(name) {
-  const key = thumbKey(name);
+function cacheDel(name, dirName) {
+  const key = thumbKey(name, dirName);
   try {
     if (cacheMode === 'idb') idbDel('thumbs', key);
     else if (cacheMode === 'ls') localStorage.removeItem(LS_PREFIX + key);
@@ -613,7 +908,7 @@ function cacheClear() {
     status('✓ Caché vaciada');
   } catch (e) { status('No se pudo vaciar: ' + e.message, true); }
 }
-const thumbKey = name => tripDir.name + '|' + name;
+const thumbKey = (name, dirName) => (dirName || (tripDir && tripDir.name) || 'root') + '|' + name;
 
 async function loadMedia() {
   const dir = tripDir, data = D;
@@ -915,8 +1210,8 @@ function compressImage(file, maxW, maxH, quality) {
   });
 }
 
-async function writeFile(name, blob) {
-  const fh = await tripDir.getFileHandle(name, { create: true });
+async function writeFile(name, blob, dir) {
+  const fh = await (dir || tripDir).getFileHandle(name, { create: true });
   const wr = await fh.createWritable();
   await wr.write(blob); await wr.close();
 }

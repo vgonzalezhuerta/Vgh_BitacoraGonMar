@@ -43,6 +43,14 @@ Ni `bitacora.json` de viajes reales, ni fotos. Este repositorio es público si u
 conserva el historial para siempre: borrar una foto después no la elimina del repositorio. Los datos se quedan
 en tu carpeta local, sincronizada con la nube si quieres.
 
+## Momentos
+
+Además de los viajes, la app guarda momentos sueltos: fecha y hora, reseña, fotos y las personas que estaban.
+Los nombres se acumulan solos, así que a partir del segundo momento se eligen de un desplegable.
+
+Viven en `Momentos/momentos.json` dentro de tu carpeta raíz, con sus fotos al lado. La app crea esa carpeta
+la primera vez sin que tengas que hacer nada.
+
 ## Formato de los viajes
 
 En `GUIA-bitacoras.md` está el esquema completo del `bitacora.json` y un prompt listo para generar viajes nuevos
