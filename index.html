@@ -221,6 +221,26 @@ textarea:focus{outline:none;border-color:var(--accent)}
 .add-photo{aspect-ratio:1;border:2px dashed var(--line);border-radius:8px;background:#fff8ea;color:#7a6a52;
   display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.75rem;gap:.2rem}
 
+/* ───── MOMENTOS Y HALLAZGOS DEL DÍA ───── */
+.dm-list{display:grid;gap:.55rem;margin-top:.4rem}
+.dm-item{background:#fff8ea;border:1px solid #d9c99f;border-left:4px solid var(--alt);border-radius:8px;padding:.55rem .7rem}
+.dm-when{font-size:.74rem;color:#7a6a52;font-weight:700}
+.dm-place{font-size:.88rem;color:var(--panel);font-weight:900}
+.dm-text{font-size:.9rem;margin:.25rem 0;white-space:pre-wrap}
+.dm-coord{font-size:.74rem;color:var(--alt);font-weight:700}
+.dm-acts{display:flex;gap:.4rem;justify-content:flex-end;margin-top:.4rem}
+.dm-acts button{background:#e6dbc0;color:var(--panel);border:1px solid #c9b98f;border-radius:6px;
+  padding:.2rem .55rem;font-size:.72rem;font-weight:700}
+.dm-add{width:100%;background:#fff8ea;border:2px dashed var(--line);color:#7a6a52;border-radius:8px;
+  padding:.45rem;font-size:.8rem;font-weight:700;margin-top:.5rem}
+.dm-form{background:#fff8ea;border:2px dashed var(--line);border-radius:10px;padding:.75rem;margin-top:.4rem}
+.dm-form .fld{margin-bottom:.7rem}
+.dm-form textarea{min-height:70px}
+.dm-loc{background:#fff;border:2px solid #d9c99f;border-radius:8px;padding:.4rem .55rem;font-size:.8rem;
+  font-weight:400;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+/* mientras se espera el toque en el mapa */
+#leaflet-map.picking{outline:3px solid var(--accent);cursor:crosshair}
+
 /* ───── SCOREBOARD ───── */
 .score-table{width:100%;border-collapse:collapse;font-size:.85rem}
 .score-table th{background:var(--panel);color:var(--accent2);text-align:left;padding:.4rem .5rem;font-family:var(--display);font-weight:400;font-size:1rem}
@@ -863,7 +883,8 @@ async function openTrip(i) {
     tripDir = t.handle;
     D = t.data;
     if (!D.visited) D.visited = [];
-    ['journals', 'caught', 'photoFiles', 'statueFiles'].forEach(k => { if (!D[k]) D[k] = {}; });
+    ['journals', 'caught', 'photoFiles', 'statueFiles', 'moments'].forEach(k => { if (!D[k]) D[k] = {}; });
+    dayDraft = null; cancelPick();
 
     if (!Array.isArray(D.days) || !D.days.length) { renderOldFormat(t); return; }
 
@@ -1005,6 +1026,8 @@ async function loadMedia() {
   const jobs = [];   // [nombre de archivo, clave, ¿imagen grande?]
   for (const [key, file] of Object.entries(data.photoFiles)) jobs.push([file, key, false]);
   for (const [key, file] of Object.entries(data.statueFiles)) jobs.push([file, 's-' + key, false]);
+  for (const lista of Object.values(data.moments || {}))
+    for (const m of lista) for (const f of (m.photos || [])) jobs.push([f, 'mom-' + f, false]);
   if (data.map?.staticImage) jobs.push([data.map.staticImage, 'mapimg', true]);
   if (data.trip?.coverImage) jobs.push([data.trip.coverImage, 'cover', true]);
   if (!jobs.length) return;
@@ -1072,6 +1095,7 @@ async function readPending([name, key, big]) {
 function refreshImages() {
   (D.days || []).forEach((d, i) => {
     renderPhotos(i);
+    renderDayMoments(i);
     (d.hunt?.items || []).forEach((_, j) => renderStatue(i, j));
   });
 }
@@ -1095,6 +1119,7 @@ async function retryPending() {
 /* La foto a tamaño completo solo se lee del disco al ampliarla */
 function fileNameFor(key) {
   if (key === 'mapimg') return D.map?.staticImage;
+  if (key.startsWith('mom-')) return key.slice(4);   // la clave de un momento lleva dentro el nombre del archivo
   if (key.startsWith('s-')) return D.statueFiles[key.slice(2)];
   return D.photoFiles[key];
 }
@@ -1129,7 +1154,8 @@ function renderTrip() {
 
   const hasCoords = (D.days || []).some(d => d.map);
   if (hasCoords) h += `<div class="panel"><div class="panel-label">🧭 Mapa interactivo</div><div id="leaflet-map"></div>
-    <div class="map-hint">Toca un marcador para ver la parada. Acerca el mapa para ver la ruta a pie de cada día.</div></div>`;
+    <div class="map-hint">Toca un marcador para ver la parada. Acerca el mapa para ver la ruta a pie de cada día.
+      Los ✨ son los momentos y sitios que añadiste tú.</div></div>`;
 
   if (D.vehicle) {
     const v = D.vehicle;
@@ -1151,7 +1177,7 @@ function renderTrip() {
   h += scoreboard() + `</main>`;
   el('app').innerHTML = h;
 
-  days.forEach((d, i) => { renderPhotos(i); (d.hunt?.items || []).forEach((_, j) => renderStatue(i, j)); updateHuntBadge(i); });
+  days.forEach((d, i) => { renderPhotos(i); renderDayMoments(i); (d.hunt?.items || []).forEach((_, j) => renderStatue(i, j)); updateHuntBadge(i); });
   updateProgress(); updateScore();
   if (hasCoords) initMap();
 }
@@ -1212,6 +1238,8 @@ function dayCard(d, i) {
         <span class="saved-ok" id="ok-${i}">✓ Guardado</span></div>
       <div class="journal-label" style="margin-top:.8rem">📸 Fotos del día</div>
       <div class="photo-grid" id="pg-${i}"></div>
+      <div class="journal-label" style="margin-top:.9rem">✨ Momentos y sitios fuera de la ruta</div>
+      <div class="dm-list" id="dm-${i}"></div>
     </div></div>`;
 }
 
@@ -1427,6 +1455,243 @@ async function deleteStatue(i, j) {
   await save(); renderStatue(i, j); updateHuntBadge(i); updateScore();
 }
 
+/* ─── MOMENTOS Y HALLAZGOS DEL DÍA ───
+   Lo que de verdad pasó, al margen de la ruta preparada: un sitio que no estaba
+   en el plan, una merienda, un rato que merece recordarse. Nunca toca `route`. */
+let dayDraft = null;      // momento que se está escribiendo
+let mapPickDay = null;    // día que espera un toque en el mapa
+
+const dayMoments = i => (D.moments && D.moments[i]) || [];
+const momKey = f => 'mom-' + f;
+
+function renderDayMoments(i) {
+  const box = el('dm-' + i);
+  if (!box) return;
+  if (dayDraft && dayDraft.day === i) { box.innerHTML = dayMomentForm(); renderDayDraftPhotos(); return; }
+
+  const lista = dayMoments(i).slice().sort((a, b) => (a.datetime || '').localeCompare(b.datetime || ''));
+  box.innerHTML = lista.map(m => {
+    const fotos = (m.photos || []).filter(f => urls[momKey(f)]).map(f =>
+      `<div class="photo-thumb"><img src="${urls[momKey(f)]}" alt="" loading="lazy" onclick="openLightbox('${esc(momKey(f))}')"></div>`).join('');
+    return `<div class="dm-item">
+      <div class="dm-when">${esc(fmtDate(m.datetime))}</div>
+      ${m.place ? `<div class="dm-place">📍 ${esc(m.place)}</div>` : ''}
+      ${m.text ? `<div class="dm-text">${esc(m.text)}</div>` : ''}
+      ${m.lat != null ? `<div class="dm-coord">🗺️ ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}</div>` : ''}
+      ${fotos ? `<div class="photo-grid">${fotos}</div>` : ''}
+      <div class="dm-acts">
+        <button onclick="editDayMoment(${i},'${esc(m.id)}')">✎ Editar</button>
+        <button onclick="deleteDayMoment(${i},'${esc(m.id)}')">🗑 Borrar</button>
+      </div></div>`;
+  }).join('') + `<button class="dm-add" onclick="newDayMoment(${i})">＋ Añadir un momento o un sitio</button>`;
+}
+
+function dayMomentForm() {
+  const d = dayDraft;
+  const hayMapa = (D.days || []).some(x => x.map);
+  return `<div class="dm-form">
+    <label class="fld">Cuándo
+      <input type="datetime-local" id="dm-dt" value="${esc(d.datetime)}"></label>
+    <label class="fld">Sitio
+      <input type="text" id="dm-place" value="${esc(d.place || '')}" placeholder="La heladería de la plaza (opcional)"></label>
+    <label class="fld">¿Qué pasó?
+      <textarea id="dm-text" placeholder="Lo que no estaba en el plan…">${esc(d.text || '')}</textarea></label>
+    <div class="fld">Dónde
+      <div class="dm-loc">${d.lat != null
+        ? `🗺️ ${d.lat.toFixed(5)}, ${d.lng.toFixed(5)} <button class="tb-btn" onclick="clearDayLoc()">Quitar</button>`
+        : '<span class="muted">Sin marcar en el mapa</span>'}</div>
+      <div class="row">
+        <button class="tb-btn" onclick="locateHere()">📍 Estoy aquí</button>
+        ${hayMapa ? `<button class="tb-btn" onclick="pickOnMap()">🗺️ Marcar en el mapa</button>` : ''}
+      </div></div>
+    <div class="fld">Fotos
+      <div class="photo-grid" id="dm-fotos"></div></div>
+    <div class="row end">
+      <button class="tb-btn" onclick="cancelDayMoment()">Cancelar</button>
+      <button class="tb-btn primary" onclick="saveDayMoment()">Guardar momento</button>
+    </div></div>`;
+}
+
+function syncDayDraft() {
+  if (!dayDraft) return;
+  const dt = el('dm-dt'), tx = el('dm-text'), pl = el('dm-place');
+  if (dt && dt.value) dayDraft.datetime = dt.value;
+  if (tx) dayDraft.text = tx.value;
+  if (pl) dayDraft.place = pl.value;
+}
+
+function newDayMoment(i) {
+  if (dayDraft) cancelDayMoment();
+  dayDraft = { day: i, id: 'mo' + Date.now(), datetime: nowLocalISO(), text: '', place: '', photos: [] };
+  renderDayMoments(i);
+}
+
+function editDayMoment(i, id) {
+  const m = dayMoments(i).find(x => x.id === id);
+  if (!m) return;
+  dayDraft = JSON.parse(JSON.stringify(m));
+  dayDraft.day = i;
+  if (!Array.isArray(dayDraft.photos)) dayDraft.photos = [];
+  renderDayMoments(i);
+}
+
+async function cancelDayMoment() {
+  const d = dayDraft;
+  if (!d) return;
+  // Las fotos se escriben al elegirlas; si se cancela hay que deshacer las que no estaban guardadas
+  const guardadas = (dayMoments(d.day).find(x => x.id === d.id) || {}).photos || [];
+  for (const f of d.photos.filter(f => !guardadas.includes(f))) await dropMomentPhoto(f);
+  const i = d.day;
+  dayDraft = null; cancelPick();
+  renderDayMoments(i);
+}
+
+function clearDayLoc() {
+  syncDayDraft();
+  delete dayDraft.lat; delete dayDraft.lng;
+  renderDayMoments(dayDraft.day);
+}
+
+function locateHere() {
+  syncDayDraft();
+  if (!navigator.geolocation) { status('Este navegador no sabe decir dónde estás', true); return; }
+  status('Buscando dónde estás…');
+  navigator.geolocation.getCurrentPosition(pos => {
+    if (!dayDraft) return;
+    dayDraft.lat = +pos.coords.latitude.toFixed(6);
+    dayDraft.lng = +pos.coords.longitude.toFixed(6);
+    renderDayMoments(dayDraft.day);
+    status('✓ Ubicación tomada');
+  }, err => {
+    const causa = err.code === err.PERMISSION_DENIED ? 'no has dado permiso de ubicación'
+      : err.code === err.TIMEOUT ? 'ha tardado demasiado, prueba al aire libre'
+      : 'no hay señal suficiente';
+    status('No se pudo tomar la ubicación: ' + causa + '. Puedes marcarla en el mapa.', true);
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+}
+
+function pickOnMap() {
+  syncDayDraft();
+  const box = el('leaflet-map');
+  if (!mapObj || !box) { status('El mapa no está disponible en este viaje', true); return; }
+  mapPickDay = dayDraft.day;
+  box.classList.add('picking');
+  status('Toca en el mapa el sitio exacto');
+  box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelPick() {
+  mapPickDay = null;
+  const box = el('leaflet-map');
+  if (box) box.classList.remove('picking');
+}
+
+function mapPicked(e) {
+  if (mapPickDay == null || !dayDraft) return;
+  dayDraft.lat = +e.latlng.lat.toFixed(6);
+  dayDraft.lng = +e.latlng.lng.toFixed(6);
+  const i = mapPickDay;
+  cancelPick();
+  if (mapObj) mapObj.closePopup();
+  renderDayMoments(i);
+  goToDay(i);
+  status('✓ Sitio marcado');
+}
+
+// Leaflet no pasa al mapa el toque que cae sobre un marcador. Sin esto, marcar
+// encima de una parada o de un paso de la ruta no haría nada.
+function pickable(marker) {
+  marker.on('click', e => { if (mapPickDay != null) mapPicked(e); });
+  return marker;
+}
+
+function goToDay(i) {
+  const card = el('dc-' + i);
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function addDayMomentPhotos() {
+  const input = el('photo-input');
+  input.value = '';
+  input.onchange = async () => {
+    if (!input.files.length || !dayDraft) return;
+    syncDayDraft();
+    if (!await ensurePermission(tripDir)) { status('Sin permiso de escritura en la carpeta', true); return; }
+    status('Guardando fotos…');
+    for (const file of input.files) {
+      try {
+        const blob = await compressImage(file, 1400, 1400, 0.78);
+        const name = `momento_dia${dayDraft.day + 1}_${dayDraft.id}_${dayDraft.photos.length}.jpg`;
+        await writeFile(name, blob);
+        const max = thumbSize(false);
+        const thumb = await compressImage(blob, max, max, thumbQuality());
+        urls[momKey(name)] = URL.createObjectURL(thumb);
+        await cacheSet(name, thumb);
+        dayDraft.photos.push(name);
+      } catch (e) { status('Una foto no se pudo guardar: ' + e.message, true); }
+    }
+    renderDayDraftPhotos();
+    status('✓ Fotos añadidas');
+  };
+  input.click();
+}
+
+function renderDayDraftPhotos() {
+  const grid = el('dm-fotos');
+  if (!grid || !dayDraft) return;
+  grid.innerHTML = dayDraft.photos.map(f =>
+    `<div class="photo-thumb">${urls[momKey(f)] ? `<img src="${urls[momKey(f)]}" alt="">` : '<div class="ph"></div>'}
+      <button class="del-btn" onclick="removeDayDraftPhoto('${esc(f)}')">✕</button></div>`).join('')
+    + `<button class="add-photo" onclick="addDayMomentPhotos()"><span style="font-size:1.4rem">＋</span>Añadir</button>`;
+}
+
+async function removeDayDraftPhoto(file) {
+  syncDayDraft();
+  dayDraft.photos = dayDraft.photos.filter(f => f !== file);
+  await dropMomentPhoto(file);
+  renderDayDraftPhotos();
+}
+
+async function dropMomentPhoto(file) {
+  cacheDel(file);
+  delete urls[momKey(file)]; delete fullUrls[momKey(file)];
+  try { await tripDir.removeEntry(file); } catch (_) {}
+}
+
+async function saveDayMoment() {
+  syncDayDraft();
+  const d = dayDraft;
+  if (!d.text && !d.place && !d.photos.length && d.lat == null) {
+    status('Escribe algo, marca un sitio o añade una foto', true); return;
+  }
+  const guardado = { id: d.id, datetime: d.datetime, place: d.place || '', text: d.text || '', photos: d.photos };
+  if (d.lat != null) { guardado.lat = d.lat; guardado.lng = d.lng; }
+
+  const i = d.day, lista = dayMoments(i).slice();
+  const k = lista.findIndex(x => x.id === d.id);
+  if (k >= 0) lista[k] = guardado; else lista.push(guardado);
+  D.moments[i] = lista;
+
+  dayDraft = null; cancelPick();
+  await save();
+  renderDayMoments(i);
+  refreshMomentMarkers();
+  status('✓ Momento guardado');
+}
+
+async function deleteDayMoment(i, id) {
+  const m = dayMoments(i).find(x => x.id === id);
+  if (!m) return;
+  if (!confirm('¿Borrar este momento? También se borran sus fotos de la carpeta.')) return;
+  for (const f of (m.photos || [])) await dropMomentPhoto(f);
+  D.moments[i] = dayMoments(i).filter(x => x.id !== id);
+  if (!D.moments[i].length) delete D.moments[i];
+  await save();
+  renderDayMoments(i);
+  refreshMomentMarkers();
+  status('Momento borrado');
+}
+
 async function openLightbox(key) {
   const img = el('lightbox-img');
   img.src = urls[key] || '';
@@ -1453,7 +1718,7 @@ async function save() {
 }
 
 /* ─── MAPA ─── */
-let mapObj = null, mapTries = 0;
+let mapObj = null, mapTries = 0, momentLayer = null;
 function initMap() {
   const box = el('leaflet-map');
   if (!box) return;
@@ -1477,12 +1742,12 @@ function initMap() {
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--panel').trim();
   stops.forEach((x, k) => {
     const m = x.d.map, color = m.color || accent;
-    L.marker([m.lat, m.lng], { icon: L.divIcon({ className: '', iconSize: [30, 30], iconAnchor: [15, 15],
+    pickable(L.marker([m.lat, m.lng], { icon: L.divIcon({ className: '', iconSize: [30, 30], iconAnchor: [15, 15],
       html: `<div style="background:${color};width:30px;height:30px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px">${k + 1}</div>` }) })
       .bindPopup(`<div style="font-family:Lato,sans-serif;text-align:center;min-width:140px">
         ${m.image ? `<img src="${m.image}" style="width:100%;height:84px;object-fit:cover;border-radius:6px;margin-bottom:5px" onerror="this.remove()">` : ''}
         <div style="font-weight:900">${esc(m.label || x.d.place)}</div>
-        <div style="font-size:.78rem;color:#777">${esc(m.when || x.d.date || '')}</div></div>`, { maxWidth: 220 })
+        <div style="font-size:.78rem;color:#777">${esc(m.when || x.d.date || '')}</div></div>`, { maxWidth: 220 }))
       .addTo(mapObj);
   });
 
@@ -1493,10 +1758,10 @@ function initMap() {
     if (!r || !r.line) return;
     const color = r.color || '#8e44ad';
     const pl = L.polyline(r.line, { color, weight: 3, opacity: .9 });
-    const marks = (r.steps || []).filter(s => s.lat).map((s, si) => L.marker([s.lat, s.lng], {
+    const marks = (r.steps || []).filter(s => s.lat).map((s, si) => pickable(L.marker([s.lat, s.lng], {
       icon: L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10],
         html: `<div style="background:${color};width:20px;height:20px;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:900">${si + 1}</div>` })
-    }).bindPopup(`<b>${esc(s.time || '')}</b><br>${esc(s.short || s.place || '')}`, { maxWidth: 180 }));
+    }).bindPopup(`<b>${esc(s.time || '')}</b><br>${esc(s.short || s.place || '')}`, { maxWidth: 180 })));
     layers.push({ zoom: r.zoom || 12, pl, marks });
   });
   const refresh = () => {
@@ -1508,7 +1773,37 @@ function initMap() {
     });
   };
   mapObj.on('zoomend', refresh); refresh();
+
+  momentLayer = L.layerGroup().addTo(mapObj);
+  refreshMomentMarkers();
+  mapObj.on('click', mapPicked);
+
   setTimeout(() => mapObj.invalidateSize(), 300);
+}
+
+// Los momentos con ubicación van en su propia capa, siempre visible y con otro color:
+// se distinguen de un vistazo de las paradas del itinerario y de las rutas a pie.
+function refreshMomentMarkers() {
+  if (!mapObj || !momentLayer) return;
+  momentLayer.clearLayers();
+  if (typeof L === 'undefined') return;
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--alt').trim() || '#1a6b9a';
+  Object.entries(D.moments || {}).forEach(([día, lista]) => {
+    const i = +día;
+    lista.filter(m => m.lat != null).forEach(m => {
+      const foto = (m.photos || []).find(f => urls[momKey(f)]);
+      pickable(L.marker([m.lat, m.lng], { icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13],
+        html: `<div style="background:${color};width:26px;height:26px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:13px">✨</div>` }) })
+        .bindPopup(`<div style="font-family:Lato,sans-serif;min-width:150px">
+          ${foto ? `<img src="${urls[momKey(foto)]}" style="width:100%;height:84px;object-fit:cover;border-radius:6px;margin-bottom:5px">` : ''}
+          ${m.place ? `<div style="font-weight:900">${esc(m.place)}</div>` : ''}
+          <div style="font-size:.74rem;color:#777">${esc(fmtDate(m.datetime))}</div>
+          ${m.text ? `<div style="font-size:.82rem;margin-top:3px">${esc(m.text.slice(0, 140))}${m.text.length > 140 ? '…' : ''}</div>` : ''}
+          <button onclick="goToDay(${i})" style="margin-top:6px;font-size:.75rem">Ver en el diario</button>
+        </div>`, { maxWidth: 230 }))
+        .addTo(momentLayer);
+    });
+  });
 }
 
 /* ─── COPIA DE SEGURIDAD (ZIP) ─── */
@@ -1520,6 +1815,8 @@ async function exportZip() {
     zip.file('bitacora.json', JSON.stringify(D, null, 2));
     const all = { ...D.photoFiles };
     Object.entries(D.statueFiles).forEach(([k, v]) => all['s-' + k] = v);
+    Object.values(D.moments || {}).forEach(lista =>
+      lista.forEach(m => (m.photos || []).forEach(f => all['mom-' + f] = f)));
     for (const name of new Set(Object.values(all))) {
       try { const fh = await tripDir.getFileHandle(name); zip.file(name, await (await fh.getFile()).arrayBuffer()); } catch (_) {}
     }
@@ -1580,6 +1877,19 @@ async function generatePDF() {
     if (D.journals[i]) body += `<h3>Diario</h3><p class="journal">${esc(D.journals[i]).replace(/\n/g, '<br>')}</p>`;
     const photoKeys = Object.keys(D.photoFiles).filter(k => k.startsWith(`day-${i}-`)).filter(k => imgs[k]);
     if (photoKeys.length) body += `<h3>Fotos del día</h3><div class="gal">${photoKeys.map(k => `<img src="${imgs[k]}">`).join('')}</div>`;
+    const moms = (D.moments || {})[i] || [];
+    if (moms.length) {
+      body += `<h3>Momentos y sitios fuera de la ruta</h3>` + moms.slice()
+        .sort((a, b) => (a.datetime || '').localeCompare(b.datetime || ''))
+        .map(m => {
+          const fotos = (m.photos || []).filter(f => imgs[momKey(f)]);
+          return `<div class="moment">
+            <b>${esc(m.place || fmtDate(m.datetime))}</b>${m.place ? ` <span class="muted">${esc(fmtDate(m.datetime))}</span>` : ''}
+            ${m.text ? `<p>${esc(m.text).replace(/\n/g, '<br>')}</p>` : ''}
+            ${fotos.length ? `<div class="gal">${fotos.map(f => `<img src="${imgs[momKey(f)]}">`).join('')}</div>` : ''}
+          </div>`;
+        }).join('');
+    }
     if (items.length) {
       body += `<h3>${esc(W('huntTitle', 'Caza de tesoros'))}</h3><ul class="hunt">` + items.map((it, j) => {
         const done = D.caught[i + '-' + j], ph = imgs['s-' + i + '-' + j];
@@ -1614,6 +1924,8 @@ async function generatePDF() {
     .alert{background:#ffe9c9;padding:4pt 6pt;border-radius:3pt;font-size:9.5pt;margin-bottom:5pt}
     ul{margin-left:16pt}li{margin-bottom:3pt}.muted{color:#5c5142;font-size:9.5pt}
     .journal{background:#fffaf0;border-left:3pt solid ${v['--alt']};padding:6pt 8pt}
+    .moment{border-left:2pt solid ${v['--alt']};padding:2pt 0 2pt 6pt;margin-bottom:6pt}
+    .moment p{margin:2pt 0}
     .gal{display:flex;flex-wrap:wrap;gap:4pt}.gal img{width:31%;border-radius:4pt;object-fit:cover}
     ul.hunt{list-style:none;margin-left:0}ul.hunt li{display:flex;align-items:center;gap:6pt}
     ul.hunt li.done{font-weight:700}.proof{width:80pt;border-radius:4pt;border:1.5pt solid ${v['--accent']}}

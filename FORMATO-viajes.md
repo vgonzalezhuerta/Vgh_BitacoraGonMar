@@ -161,9 +161,32 @@ valor por defecto y no rompe nada.
   "journals":    {},                     // { "0": "texto de la reseña" }
   "caught":      {},                     // { "2-0": true }
   "photoFiles":  {},                     // { "day-2-0": "foto_dia3_1.jpg" }
-  "statueFiles": {}                      // { "2-0": "captura_2-0.jpg" }
+  "statueFiles": {},                     // { "2-0": "captura_2-0.jpg" }
+  "moments":     {}                      // momentos y sitios fuera de la ruta, por día. Ver abajo
 }
 ```
+
+`moments` va indexado por el índice del día, igual que `journals`, y cada día lleva una lista:
+
+```jsonc
+"moments": {
+  "2": [
+    {
+      "id": "mo1751210400000",           // lo pone la app
+      "datetime": "2026-06-28T18:30",    // local, sin zona
+      "place": "Heladería de la plaza",  // opcional
+      "text": "Nos desviamos y acabamos aquí.",
+      "lat": 37.9765,                    // opcional: solo si se marcó en el mapa o con el GPS
+      "lng": 23.7283,
+      "photos": ["momento_dia3_mo1751210400000_0.jpg"]
+    }
+  ]
+}
+```
+
+**No lo generes tú.** Es lo que la familia añade sobre la marcha: lo que de verdad pasó, frente a lo que se
+planeó en `route`. Un viaje nuevo lo entrega vacío (`{}`) y la app no toca nunca los pasos de `route`, así que
+un viaje se puede regenerar sin perder estos momentos siempre que se conserve este campo.
 
 Detalles que se escapan:
 
@@ -255,7 +278,7 @@ del total de puntos posible del viaje, no por encima.
 - [ ] `theme` es uno de los seis de §5.
 - [ ] Todas las coordenadas son reales y caen donde deben (lat antes que lng).
 - [ ] Las horas de cada `route` caben entre llegada y salida del día.
-- [ ] `visited`, `journals`, `caught`, `photoFiles` y `statueFiles` están presentes y vacíos.
+- [ ] `visited`, `journals`, `caught`, `photoFiles`, `statueFiles` y `moments` están presentes y vacíos.
 - [ ] Ningún dato histórico inventado.
 
 Guarda el resultado como `bitacora.json` en una subcarpeta nueva de tu carpeta de viajes y pulsa **Actualizar**

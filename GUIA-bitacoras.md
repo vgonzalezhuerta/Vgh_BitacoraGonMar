@@ -71,6 +71,26 @@ En el móvil no funciona: la API que lee carpetas del disco no existe en Android
 La pestaña **Momentos** guarda instantes sueltos fuera de los viajes: fecha y hora, reseña, fotos y quién
 estaba. Van a `Momentos/momentos.json`, que la app crea sola la primera vez.
 
+## Momentos y sitios fuera de la ruta
+
+Dentro de un viaje, cada día tiene al final **✨ Momentos y sitios fuera de la ruta**. Sirve para lo que no
+estaba en el plan: la heladería que encontrasteis por casualidad, una playa a la que os desviasteis, un rato
+que merece recordarse. Cada uno lleva hora, sitio, texto, fotos y, si quieres, un punto en el mapa.
+
+El punto se marca de dos maneras:
+
+- **📍 Estoy aquí** toma tu posición del GPS. Necesita que des permiso de ubicación y que la app esté abierta
+  por `https` (la URL de GitHub Pages).
+- **🗺️ Marcar en el mapa** te lleva al mapa del viaje; el siguiente toque marca el sitio. Vale también tocar
+  encima de una parada o de un paso de la ruta, si el sitio es justo ese.
+
+Los momentos con punto salen en el mapa como marcadores ✨, con otro color que las paradas del itinerario, y
+su globo tiene un enlace para saltar al día en el diario. Salen también en el PDF y en la copia ZIP.
+
+**La ruta preparada no se toca nunca.** Los pasos de `route` siguen siendo lo que se planeó; esto se guarda
+aparte, en `moments` del `bitacora.json`. Así se puede ver a la vez lo previsto y lo que pasó de verdad, y
+regenerar el viaje desde el proyecto de Claude sin perder nada de lo vuestro.
+
 ## Al tocar la app
 
 Si cambias `index.html`, sube el número de `VERSION` en `sw.js` (`bitacoras-v7` → `bitacoras-v8`) en el mismo
