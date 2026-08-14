@@ -88,6 +88,16 @@ a{color:var(--panel)}
 .trip-meta{font-size:.75rem;color:#4a4033;display:flex;gap:.7rem;flex-wrap:wrap}
 .mini-bar{height:6px;background:#0000001a;border-radius:3px;margin-top:.5rem;overflow:hidden}
 .mini-bar span{display:block;height:100%;background:var(--accent);border-radius:3px}
+.lib-group{margin-bottom:1.9rem}
+.lib-group-head{display:flex;align-items:center;gap:.5rem;margin-bottom:.7rem;padding-bottom:.35rem;border-bottom:1px solid #ffffff26}
+.lib-group-title{font-family:var(--display);font-size:1.2rem;color:var(--accent2);letter-spacing:.03em}
+.lib-group-count{font-size:.68rem;color:#a8cce0;background:#ffffff1a;border-radius:10px;padding:.12rem .5rem}
+.trip-card .estado{position:absolute;top:.4rem;left:.4rem;font-size:.6rem;font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;border-radius:20px;padding:.15rem .5rem;color:#fff;background:rgba(0,0,0,.55)}
+.estado.curso{background:#1e8449}
+.estado.pendiente{background:#8a6d1f}
+.trip-card.pendiente{opacity:.92}
+.trip-card.pendiente .trip-cover{filter:saturate(.5)}
 
 /* ───── HEADER ───── */
 header{position:relative;z-index:1;background:linear-gradient(180deg,#040e1a 0%,var(--panel) 70%,var(--alt) 100%);
@@ -403,6 +413,48 @@ async function pickRoot() {
   } finally { pickerBusy = false; }
 }
 
+/* ─── ESTADO DE UN VIAJE: pendiente · en curso · hecho ───
+   Manda trip.status si está puesto; si no, se deduce de las fechas. */
+const GRUPOS = [
+  { key: 'curso',     titulo: 'En curso',   icon: '⛵' },
+  { key: 'pendiente', titulo: 'Pendientes', icon: '🗓' },
+  { key: 'hecho',     titulo: 'Hechos',     icon: '✓' }
+];
+const ORDEN = { curso: 0, pendiente: 1, hecho: 2 };
+const ALIAS = {
+  pendiente: 'pendiente', pendientes: 'pendiente', backlog: 'pendiente', idea: 'pendiente', pending: 'pendiente',
+  curso: 'curso', 'en curso': 'curso', activo: 'curso', active: 'curso',
+  hecho: 'hecho', hecha: 'hecho', hechos: 'hecho', done: 'hecho', completado: 'hecho', terminado: 'hecho'
+};
+
+function hoyISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function tripStatus(data) {
+  const tr = data.trip || {};
+  const manual = ALIAS[String(tr.status || '').trim().toLowerCase()];
+  if (manual) return manual;
+  const start = tr.startDate || '';
+  if (!start) return 'pendiente';          // idea de backlog sin fechas todavía
+  const end = tr.endDate || start, hoy = hoyISO();
+  if (hoy < start) return 'pendiente';
+  if (hoy > end) return 'hecho';
+  return 'curso';
+}
+
+function cuantoFalta(start) {
+  const dias = Math.round((new Date(start + 'T00:00:00') - new Date(hoyISO() + 'T00:00:00')) / 86400000);
+  if (!isFinite(dias) || dias <= 0) return '';
+  if (dias === 1) return 'mañana';
+  if (dias < 31) return `en ${dias} días`;
+  const meses = Math.round(dias / 30);
+  if (meses < 12) return `en ${meses} ${meses === 1 ? 'mes' : 'meses'}`;
+  const años = Math.round(dias / 365);
+  return `en ${años} año${años === 1 ? '' : 's'}`;
+}
+
 async function scanTrips() {
   tripHandles = [];
   for await (const entry of rootHandle.values()) {
@@ -410,13 +462,53 @@ async function scanTrips() {
     try {
       const fh = await entry.getFileHandle('bitacora.json');
       const data = JSON.parse(await (await fh.getFile()).text());
-      tripHandles.push({ handle: entry, data, folder: entry.name });
+      tripHandles.push({ handle: entry, data, folder: entry.name, status: tripStatus(data) });
     } catch (_) { /* subcarpeta sin bitácora: se ignora */ }
   }
-  tripHandles.sort((a, b) => (b.data.trip?.startDate || '').localeCompare(a.data.trip?.startDate || ''));
+  tripHandles.sort((a, b) => {
+    if (ORDEN[a.status] !== ORDEN[b.status]) return ORDEN[a.status] - ORDEN[b.status];
+    const da = a.data.trip?.startDate || '', db = b.data.trip?.startDate || '';
+    if (a.status === 'hecho') return db.localeCompare(da);   // los últimos viajes, arriba
+    if (!da !== !db) return da ? -1 : 1;                     // las ideas sin fecha, al final
+    return da.localeCompare(db);                             // lo más próximo, arriba
+  });
 }
 
 /* ─── PANTALLA: BIBLIOTECA ─── */
+function tripCard(t, i) {
+  const tr = t.data.trip || {}, th = THEMES[tr.theme] || THEMES.crucero;
+  const days = t.data.days || [], est = t.status;
+  const vis = (t.data.visited || []).filter(Boolean).length;
+  const pct = days.length ? Math.round(vis / days.length * 100) : 0;
+  let pts = 0, caught = 0, max = 0, objetivos = 0;
+  days.forEach((d, di) => (d.hunt?.items || []).forEach((it, ii) => {
+    max += it.pts || 0; objetivos++;
+    if ((t.data.caught || {})[di + '-' + ii]) { pts += it.pts || 0; caught++; }
+  }));
+
+  // un viaje pendiente no tiene progreso que enseñar: se muestra lo que trae preparado
+  const falta = est === 'pendiente' ? cuantoFalta(tr.startDate || '') : '';
+  const meta = est === 'pendiente'
+    ? `<span>📅 ${days.length} día${days.length === 1 ? '' : 's'}</span>
+       <span>🗿 ${objetivos} objetivo${objetivos === 1 ? '' : 's'}</span>
+       ${falta ? `<span>⏳ ${falta}</span>` : ''}`
+    : `<span>📍 ${vis}/${days.length}</span>
+       <span>${th.icon} ${caught} captura${caught === 1 ? '' : 's'}</span>
+       <span>⭐ ${pts}${max ? '/' + max : ''}</span>`;
+  const pill = est === 'hecho' ? ''
+    : `<span class="estado ${est}">${est === 'curso' ? 'en curso' : 'pendiente'}</span>`;
+
+  return `<button class="trip-card ${est}" onclick="openTrip(${i})">
+    <div class="trip-cover" id="cover-${i}" style="background:${th.vars['--panel']}">
+      <span>${th.icon}</span>${pill}<span class="badge">${esc(tr.theme || 'viaje')}</span></div>
+    <div class="trip-body">
+      <div class="trip-name">${esc(tr.title || t.folder)}</div>
+      <div class="trip-dates">${esc(tr.subtitle || '')}</div>
+      <div class="trip-meta">${meta}</div>
+      ${est === 'pendiente' ? '' : `<div class="mini-bar"><span style="width:${pct}%;background:${th.vars['--accent']}"></span></div>`}
+    </div></button>`;
+}
+
 async function showLibrary() {
   tripDir = null; D = null;
   applyTheme('crucero');
@@ -453,31 +545,23 @@ async function showLibrary() {
     return;
   }
 
-  const cards = tripHandles.map((t, i) => {
-    const tr = t.data.trip || {}, th = THEMES[tr.theme] || THEMES.crucero;
-    const days = t.data.days || [], vis = (t.data.visited || []).filter(Boolean).length;
-    const pct = days.length ? Math.round(vis / days.length * 100) : 0;
-    let pts = 0, caught = 0, max = 0;
-    days.forEach((d, di) => (d.hunt?.items || []).forEach((it, ii) => {
-      max += it.pts || 0;
-      if ((t.data.caught || {})[di + '-' + ii]) { pts += it.pts || 0; caught++; }
-    }));
-    return `<button class="trip-card" onclick="openTrip(${i})">
-      <div class="trip-cover" id="cover-${i}" style="background:${th.vars['--panel']}">
-        <span>${th.icon}</span><span class="badge">${esc(tr.theme || 'viaje')}</span></div>
-      <div class="trip-body">
-        <div class="trip-name">${esc(tr.title || t.folder)}</div>
-        <div class="trip-dates">${esc(tr.subtitle || '')}</div>
-        <div class="trip-meta"><span>📍 ${vis}/${days.length}</span><span>${th.icon} ${caught} capturas</span><span>⭐ ${pts}${max ? '/' + max : ''}</span></div>
-        <div class="mini-bar"><span style="width:${pct}%;background:${th.vars['--accent']}"></span></div>
-      </div></button>`;
+  const grupos = GRUPOS.map(g => {
+    const suyos = tripHandles.map((t, i) => ({ t, i })).filter(x => x.t.status === g.key);
+    if (!suyos.length) return '';
+    return `<div class="lib-group">
+      <div class="lib-group-head">
+        <span class="lib-group-title">${g.icon} ${g.titulo}</span>
+        <span class="lib-group-count">${suyos.length}</span>
+      </div>
+      <div class="trip-grid">${suyos.map(x => tripCard(x.t, x.i)).join('')}</div>
+    </div>`;
   }).join('');
 
   el('app').innerHTML = `<div class="library">
     <div class="lib-title">Bitácoras</div>
     ${tabs('viajes')}
     <div class="lib-sub">${tripHandles.length} viaje${tripHandles.length > 1 ? 's' : ''} en ${esc(rootHandle.name)} · <a href="#" onclick="refreshLibrary();return false" style="color:#a8cce0">actualizar</a></div>
-    <div class="trip-grid">${cards}</div></div>`;
+    ${grupos}</div>`;
 
   // portadas
   tripHandles.forEach(async (t, i) => {

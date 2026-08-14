@@ -25,7 +25,7 @@ días en mensajes sucesivos, pero cada trozo debe ser pegable en el archivo fina
 Si falta algo de esto, pregúntalo. No lo inventes.
 
 - **Viaje:** nombre y tipo (crucero, velero, montaña, playa, ciudad, carretera).
-- **Fechas:** inicio y fin.
+- **Fechas:** inicio y fin. Si es un viaje de backlog todavía sin fechas, dilo y sáltalas (ver §4).
 - **Viajeros:** nombres, y edad de los niños si los hay — marca el nivel de los textos y la dificultad de la caza.
 - **Itinerario:** una línea por día con fecha, lugar y horas de llegada y salida.
 - **Transporte:** barco, furgoneta, tren…, con su nombre si lo tiene.
@@ -48,9 +48,10 @@ valor por defecto y no rompe nada.
     "id": "costa-fortuna-2026",        // igual que el nombre de la carpeta, en minúsculas y con guiones
     "title": "Costa Fortuna",
     "subtitle": "Mediterráneo Oriental · 26 junio – 3 julio 2026",
-    "startDate": "2026-06-26",         // ISO. Ordena la biblioteca
+    "startDate": "2026-06-26",         // ISO. Opcional en un viaje de backlog sin fechas aún
     "endDate": "2026-07-03",
-    "theme": "crucero",                // ver §4
+    "status": "pendiente",             // opcional: pendiente | curso | hecho. Ver §4
+    "theme": "crucero",                // ver §5
     "crew": ["Teresa", "Víctor", "Lucía", "Daniel", "Lucas"],
     "coverImage": "portada.jpg",       // opcional, archivo en la misma carpeta
 
@@ -171,7 +172,32 @@ Detalles que se escapan:
 
 ---
 
-## 4. Temas visuales
+## 4. Estado del viaje: pendiente, en curso, hecho
+
+La biblioteca agrupa los viajes en tres secciones: **En curso** arriba, **Pendientes** en medio (lo más próximo
+primero) y **Hechos** abajo (el más reciente primero).
+
+Lo normal es **no poner `status`**: la app lo deduce de las fechas contra el día de hoy.
+
+| situación                        | estado    |
+|----------------------------------|-----------|
+| `startDate` en el futuro         | pendiente |
+| hoy entre `startDate` y `endDate`| en curso  |
+| `endDate` ya pasado              | hecho     |
+| sin `startDate`                  | pendiente |
+
+Pon `status` a mano solo cuando las fechas mientan: un viaje que se canceló y quieres archivar (`"hecho"`), o
+uno con fechas tentativas ya pasadas que sigue en el backlog (`"pendiente"`). Un `status` que no reconozca se
+ignora y manda la fecha.
+
+**Viajes de backlog.** Un viaje puede prepararse entero sin tener fechas: omite `startDate` y `endDate`, deja
+`subtitle` con la intención (`"Idea para un puente largo · 4 días"`) y usa `date` de cada día en relativo
+(`"Día 1"`, `"Día 2"`) en lugar de un día de la semana concreto. La tarjeta de un viaje pendiente no muestra
+progreso: muestra cuántos días y cuántos objetivos trae preparados, y cuánto falta si hay fecha.
+
+---
+
+## 5. Temas visuales
 
 `trip.theme` acepta exactamente uno de estos:
 
@@ -188,7 +214,7 @@ Cada uno cambia paleta, tipografía de titulares e ilustración de cabecera.
 
 ---
 
-## 5. Reglas de contenido
+## 6. Reglas de contenido
 
 Lo que separa un JSON válido de un viaje que apetece leer.
 
@@ -215,13 +241,14 @@ del total de puntos posible del viaje, no por encima.
 
 ---
 
-## 6. Comprobación antes de entregar
+## 7. Comprobación antes de entregar
 
 - [ ] JSON válido, sin comentarios, sin comas finales.
 - [ ] `schemaVersion` es `2`.
 - [ ] Un objeto en `days` por cada día del viaje, en orden, sin saltos en `n`.
 - [ ] `trip.id` coincide con el nombre de carpeta propuesto.
-- [ ] `theme` es uno de los seis de §4.
+- [ ] Si es un viaje de backlog: sin `startDate`/`endDate`, o con `status: "pendiente"` si las fechas ya pasaron.
+- [ ] `theme` es uno de los seis de §5.
 - [ ] Todas las coordenadas son reales y caen donde deben (lat antes que lng).
 - [ ] Las horas de cada `route` caben entre llegada y salida del día.
 - [ ] `visited`, `journals`, `caught`, `photoFiles` y `statueFiles` están presentes y vacíos.

@@ -24,6 +24,22 @@ Viajes/                          ← carpeta raíz (la eliges una vez en la app)
 
 La app recorre las subcarpetas de la raíz y muestra como viaje cualquiera que contenga un `bitacora.json`. No hay nada codificado dentro del HTML: cambiar un texto, una ruta o un objetivo se hace editando el JSON.
 
+## Viajes pendientes, en curso y hechos
+
+La biblioteca agrupa los viajes en tres secciones: **En curso** arriba, **Pendientes** en medio (lo más próximo
+primero, y las ideas sin fecha al final) y **Hechos** abajo (el último viaje primero).
+
+Normalmente no hay que hacer nada: el estado sale de las fechas del viaje comparadas con hoy. Si `startDate`
+está en el futuro es pendiente; si hoy cae entre `startDate` y `endDate` está en curso; si `endDate` ya pasó
+está hecho. **Un viaje sin `startDate` es pendiente**, así que puedes preparar viajes de backlog enteros sin
+haber decidido las fechas.
+
+Para forzarlo, añade `trip.status` con `"pendiente"`, `"curso"` o `"hecho"`: manda sobre las fechas. Sirve para
+archivar un viaje que se canceló, o para dejar en el backlog uno cuyas fechas tentativas ya pasaron.
+
+La tarjeta de un viaje pendiente no enseña progreso — sería siempre cero. En su lugar muestra cuántos días y
+cuántos objetivos trae preparados, y cuánto falta para empezarlo si tiene fecha.
+
 ## Temas visuales
 
 `trip.theme` acepta: `crucero`, `velero`, `montana`, `playa`, `ciudad`, `carretera`.
@@ -39,8 +55,9 @@ Cada uno cambia paleta, tipografía de titulares e ilustración de cabecera. `cr
     "id": "costa-fortuna-2026",
     "title": "Costa Fortuna",
     "subtitle": "Mediterráneo Oriental · 26 junio – 3 julio 2026",
-    "startDate": "2026-06-26",         // ordena la biblioteca
+    "startDate": "2026-06-26",         // ordena la biblioteca; omítelo en un viaje de backlog
     "endDate": "2026-07-03",
+    "status": "pendiente",             // opcional: pendiente | curso | hecho (manda sobre las fechas)
     "theme": "crucero",
     "crew": ["Teresa", "Víctor", "Lucía", "Daniel", "Lucas"],
     "coverImage": "portada.jpg",       // opcional
