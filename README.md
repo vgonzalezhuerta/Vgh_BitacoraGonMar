@@ -13,10 +13,8 @@ tesoros con puntos. Cada viaje es una carpeta con un `bitacora.json`; la app no 
 index.html                 la app entera
 manifest.webmanifest       datos de instalación
 sw.js                      caché para uso sin conexión
-icono-192.png
-icono-512.png
-icono-maskable-512.png
-icono-apple.png
+icon-192.png
+icon-512.png
 lib/                       Leaflet y JSZip (ver lib/LEEME.txt)
 ```
 
@@ -53,11 +51,11 @@ la primera vez sin que tengas que hacer nada.
 
 ## Formato de los viajes
 
-En `GUIA-bitacoras.md` está el esquema completo del `bitacora.json` y un prompt listo para generar viajes nuevos
-con una IA. Temas disponibles: `crucero`, `velero`, `montana`, `playa`, `ciudad`, `carretera`.
+`FORMATO-viajes.md` es la **única** descripción del formato: esquema del `bitacora.json`, estados, temas, reglas
+de contenido y comprobación final. No se copia a ningún otro sitio. Su §8 explica cómo enlazarlo por URL cruda
+desde un proyecto de Claude que prepare los viajes por ti.
 
-`PROYECTO-CLAUDE.md` es el mismo esquema en versión autocontenida, pensado para dárselo a un proyecto de Claude
-que prepare viajes. Se enlaza por su URL cruda para que el proyecto lea siempre la versión vigente.
+`GUIA-bitacoras.md` es la guía de uso: cómo montar tu carpeta de viajes, instalar la app y manejarla.
 
 ## Requisitos
 

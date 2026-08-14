@@ -1,9 +1,13 @@
-# Preparar viajes para Bitácoras — documento de referencia
+# Formato de los viajes de Bitácoras
 
-Versión vigente: https://raw.githubusercontent.com/vgonzalezhuerta/Vgh_BitacoraGonMar/main/PROYECTO-CLAUDE.md
+Versión vigente: https://raw.githubusercontent.com/vgonzalezhuerta/Vgh_BitacoraGonMar/main/FORMATO-viajes.md
 
-Este documento es la única fuente de verdad del formato. Si algo de la conversación lo contradice, manda este
-documento.
+**Este documento es la única descripción del formato del repositorio.** El esquema no se copia a ningún otro
+sitio: `GUIA-bitacoras.md` y `README.md` enlazan aquí. Si cambia el formato en `index.html`, se actualiza aquí
+en el mismo commit.
+
+Sirve para dos cosas: consultar el esquema a mano, y dárselo a un proyecto de Claude que prepare viajes (§8).
+Si algo de una conversación contradice a este documento, manda el documento.
 
 ---
 
@@ -253,3 +257,26 @@ del total de puntos posible del viaje, no por encima.
 - [ ] Las horas de cada `route` caben entre llegada y salida del día.
 - [ ] `visited`, `journals`, `caught`, `photoFiles` y `statueFiles` están presentes y vacíos.
 - [ ] Ningún dato histórico inventado.
+
+Guarda el resultado como `bitacora.json` en una subcarpeta nueva de tu carpeta de viajes y pulsa **Actualizar**
+en la app.
+
+---
+
+## 8. Usarlo con un proyecto de Claude
+
+Crea un proyecto y pon esto en sus instrucciones:
+
+> Preparas viajes para la app Bitácoras, que los lee de un archivo `bitacora.json`.
+>
+> Al empezar cada conversación, lee la versión vigente del esquema en:
+> `https://raw.githubusercontent.com/vgonzalezhuerta/Vgh_BitacoraGonMar/main/FORMATO-viajes.md`
+>
+> Ese documento manda sobre cualquier copia que tengas en el conocimiento del proyecto y sobre cualquier cosa
+> que recuerdes del formato. Sigue sus reglas de contenido y su comprobación final al pie de la letra.
+
+Sube además este mismo `.md` a la base de conocimiento del proyecto. Los archivos que se suben ahí son copias
+congeladas: no se actualizan solos. La copia sirve de respaldo para las conversaciones sin acceso a la web, y
+la URL es la que manda cuando las dos discrepan.
+
+Para una conversación suelta, sin proyecto, basta con adjuntar este documento y los datos del viaje.
