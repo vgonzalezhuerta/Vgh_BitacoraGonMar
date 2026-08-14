@@ -1,14 +1,18 @@
 /* Bitácoras de viaje — service worker
    Guarda la app y sus librerías para que funcione sin conexión.
    Sube VERSION cada vez que cambies index.html. */
-const VERSION = 'bitacoras-v7';
+const VERSION = 'bitacoras-v8';
 const SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
   './icono-192.png',
   './icono-512.png',
-  './icono-maskable-512.png'
+  './icono-maskable-512.png',
+  './icono-apple.png',
+  './lib/leaflet.css',
+  './lib/leaflet.js',
+  './lib/jszip.min.js'
 ];
 // Librerías y tipografías: se guardan la primera vez que se cargan con conexión
 const EXTERNOS = ['unpkg.com', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com', 'tile.openstreetmap.org'];

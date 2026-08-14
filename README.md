@@ -13,8 +13,10 @@ tesoros con puntos. Cada viaje es una carpeta con un `bitacora.json`; la app no 
 index.html                 la app entera
 manifest.webmanifest       datos de instalación
 sw.js                      caché para uso sin conexión
-icon-192.png
-icon-512.png
+icono-192.png
+icono-512.png
+icono-maskable-512.png
+icono-apple.png
 lib/                       Leaflet y JSZip (ver lib/LEEME.txt)
 ```
 
