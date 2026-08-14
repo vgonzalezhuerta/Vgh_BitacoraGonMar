@@ -56,6 +56,9 @@ la primera vez sin que tengas que hacer nada.
 En `GUIA-bitacoras.md` está el esquema completo del `bitacora.json` y un prompt listo para generar viajes nuevos
 con una IA. Temas disponibles: `crucero`, `velero`, `montana`, `playa`, `ciudad`, `carretera`.
 
+`PROYECTO-CLAUDE.md` es el mismo esquema en versión autocontenida, pensado para dárselo a un proyecto de Claude
+que prepare viajes. Se enlaza por su URL cruda para que el proyecto lea siempre la versión vigente.
+
 ## Requisitos
 
 Un navegador con acceso a archivos locales (la API File System Access). Chrome y Edge lo tienen.
