@@ -49,7 +49,7 @@ valor por defecto y no rompe nada.
   "schemaVersion": 2,
 
   "trip": {
-    "id": "costa-fortuna-2026",        // igual que el nombre de la carpeta, en minúsculas y con guiones
+    "id": "costa-fortuna-2026",        // identificador en minúsculas y con guiones; da nombre al ZIP de la copia
     "title": "Costa Fortuna",
     "subtitle": "Mediterráneo Oriental · 26 junio – 3 julio 2026",
     "startDate": "2026-06-26",         // ISO. Opcional en un viaje de backlog sin fechas aún
@@ -250,7 +250,7 @@ del total de puntos posible del viaje, no por encima.
 - [ ] JSON válido, sin comentarios, sin comas finales.
 - [ ] `schemaVersion` es `2`.
 - [ ] Un objeto en `days` por cada día del viaje, en orden, sin saltos en `n`.
-- [ ] `trip.id` coincide con el nombre de carpeta propuesto.
+- [ ] `trip.id` en minúsculas y con guiones. No tiene que coincidir con el nombre de la carpeta.
 - [ ] Si es un viaje de backlog: sin `startDate`/`endDate`, o con `status: "pendiente"` si las fechas ya pasaron.
 - [ ] `theme` es uno de los seis de §5.
 - [ ] Todas las coordenadas son reales y caen donde deben (lat antes que lng).
