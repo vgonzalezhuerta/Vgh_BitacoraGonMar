@@ -1,0 +1,6 @@
+# Los viajes viven en la carpeta del usuario, nunca aquí: el repositorio es público
+# y git guarda el historial para siempre, así que borrar un archivo después no lo quita.
+bitacora.json
+momentos.json
+*.jpg
+*.jpeg

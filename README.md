@@ -13,8 +13,10 @@ tesoros con puntos. Cada viaje es una carpeta con un `bitacora.json`; la app no 
 index.html                 la app entera
 manifest.webmanifest       datos de instalación
 sw.js                      caché para uso sin conexión
-icon-192.png
-icon-512.png
+icono-192.png
+icono-512.png
+icono-maskable-512.png
+icono-apple.png
 lib/                       Leaflet y JSZip (ver lib/LEEME.txt)
 ```
 
@@ -32,8 +34,11 @@ También recuerda la carpeta elegida entre sesiones.
 ## Al cambiar la app
 
 Sube el número de `VERSION` en `sw.js` (`bitacoras-v3` → `bitacoras-v4`) en el mismo commit. Sin eso, quien ya
-la tenga instalada seguirá viendo la versión guardada en caché. Al detectar una versión nueva, la app avisa en
-la barra superior.
+la tenga instalada seguirá viendo la versión guardada en caché.
+
+Ese número se ve en la barra superior, junto al título: así se sabe de un vistazo qué versión está usando la app
+instalada. Al tocarlo busca una versión nueva; si la encuentra, la insignia se enciende y basta con volver a
+tocarla para recargar. `sw.js` es el único sitio donde se escribe el número: la app se lo pregunta.
 
 ## Qué NO subir aquí
 

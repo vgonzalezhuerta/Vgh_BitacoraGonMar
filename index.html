@@ -62,6 +62,11 @@ a{color:var(--panel)}
 .tb-btn.connected{background:#14532d;border-color:#2f8a4d;color:#c8f0d5}
 .tb-status{font-size:.72rem;color:#8fc7a5;margin-left:auto;transition:opacity .4s;max-width:100%;word-break:break-word}
 .tb-status.err{color:#f5a3a3}
+.tb-version{background:#0d2740;color:#7fa8c9;border:1px solid #2a5f8a;border-radius:999px;
+  padding:.2rem .5rem;font-size:.68rem;letter-spacing:.04em;font-weight:700}
+.tb-version:hover{background:#123a5e;color:#dbe9f4}
+.tb-version.nueva{background:var(--accent);color:#1a1208;border-color:var(--accent2);animation:late 1.4s ease-in-out infinite}
+@keyframes late{50%{opacity:.55}}
 .hidden-input{display:none}
 
 /* ───── LIBRARY ───── */
@@ -277,6 +282,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 
 <div class="topbar">
   <span class="topbar-label">📓 Bitácoras</span>
+  <button class="tb-version" id="version" onclick="checkUpdate()" title="Versión instalada — toca para buscar una nueva" style="display:none"></button>
   <button class="tb-btn primary" id="btn-root" onclick="pickRoot()">📁 Elegir carpeta</button>
   <button class="tb-btn" id="btn-library" onclick="showLibrary()" style="display:none">🗂️ Mis viajes</button>
   <button class="tb-btn" id="btn-pdf" onclick="generatePDF()" style="display:none">📄 PDF</button>
@@ -1619,21 +1625,56 @@ async function generatePDF() {
   status('✓ Documento listo — elige "Guardar como PDF"');
 }
 
-/* ─── INSTALACIÓN (PWA) ─── */
-let installEvent = null;
+/* ─── INSTALACIÓN (PWA) Y VERSIÓN ─── */
+let installEvent = null, swReg = null, updateReady = false;
+
+// El número de versión vive solo en sw.js: se lo preguntamos para no tenerlo apuntado en dos sitios.
+function showVersion(v) {
+  if (!v) return;
+  const b = el('version');
+  b.textContent = v.replace('bitacoras-', '');
+  b.style.display = '';
+}
+function askVersion(reg) {
+  const sw = reg.active || navigator.serviceWorker.controller;
+  if (!sw) return;
+  const canal = new MessageChannel();
+  canal.port1.onmessage = e => showVersion(e.data && e.data.version);
+  sw.postMessage('version', [canal.port2]);
+}
+function updateFound() {
+  updateReady = true;
+  const b = el('version');
+  b.classList.add('nueva');
+  b.title = 'Hay una versión nueva — toca para recargar';
+  status('Hay una versión nueva — recarga la página para usarla');
+}
+async function checkUpdate() {
+  if (updateReady) { location.reload(); return; }
+  if (!swReg) { status('La versión solo se comprueba con la app abierta desde internet', true); return; }
+  status('Buscando una versión nueva…');
+  try {
+    await swReg.update();
+  } catch (e) { status('No se pudo comprobar: ' + e.message, true); return; }
+  // update() no dice si encontró algo: hay que mirar si ha arrancado una instalación
+  if (swReg.installing || swReg.waiting) status('Descargando la versión nueva…');
+  else status('Ya tienes la última versión');
+}
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', async () => {
     try {
       const reg = await navigator.serviceWorker.register('sw.js');
+      swReg = reg;
+      askVersion(reg);
+      // En la primera visita aún no hay service worker activo cuando termina el registro
+      navigator.serviceWorker.ready.then(askVersion);
       reg.addEventListener('updatefound', () => {
         const sw = reg.installing;
         sw && sw.addEventListener('statechange', () => {
-          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-            status('Hay una versión nueva — recarga la página para usarla');
-          }
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) updateFound();
         });
       });
-    } catch (e) { console.warn('SW:', e.message); }
+    } catch (e) { status('No se pudo preparar el uso sin conexión: ' + e.message, true); }
   });
 }
 window.addEventListener('beforeinstallprompt', e => {
