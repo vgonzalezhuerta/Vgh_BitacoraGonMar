@@ -1,7 +1,7 @@
 /* Bitácoras de viaje — service worker
    Guarda la app y sus librerías para que funcione sin conexión.
    Sube VERSION cada vez que cambies index.html. */
-const VERSION = 'bitacoras-v8';
+const VERSION = 'bitacoras-v9';
 const SHELL = [
   './',
   './index.html',
@@ -27,6 +27,13 @@ self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
     .then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
+});
+
+// La app pide la versión para enseñarla en la barra: aquí está el único número que se toca
+self.addEventListener('message', e => {
+  if (e.data !== 'version') return;
+  const puerto = e.ports && e.ports[0];
+  if (puerto) puerto.postMessage({ version: VERSION });
 });
 
 self.addEventListener('fetch', e => {

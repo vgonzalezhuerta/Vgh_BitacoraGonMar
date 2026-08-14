@@ -65,7 +65,9 @@ Bloques principales, en orden dentro del `<script>`:
 ## Al terminar cualquier cambio
 
 1. **Sube `VERSION` en `sw.js`** (`bitacoras-vN` → `vN+1`). Sin eso, la app instalada sigue sirviendo la
-   versión cacheada y el cambio no llega. Es el error más fácil de cometer aquí.
+   versión cacheada y el cambio no llega. Es el error más fácil de cometer aquí. Ese número es el único que
+   se escribe: la insignia de la barra superior se lo pregunta al service worker (`postMessage('version')`),
+   así que no hay que tocarlo en `index.html`.
 2. Comprobar que el JS sigue siendo válido y que no se han roto los viajes existentes.
 3. No dejar `console.log` de depuración; los errores se muestran al usuario con `status(msg, true)`.
 
