@@ -17,6 +17,7 @@ icono-192.png
 icono-512.png
 icono-maskable-512.png
 icono-apple.png
+icono-fuente.svg           dibujo del que salen los cuatro PNG
 lib/                       Leaflet y JSZip (ver lib/LEEME.txt)
 ```
 

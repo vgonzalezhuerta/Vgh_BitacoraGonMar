@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="cuero" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#1a5285"/>
+      <stop offset="0.55" stop-color="#0e3a63"/>
+      <stop offset="1" stop-color="#072744"/>
+    </linearGradient>
+    <linearGradient id="lomo" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#051d33"/>
+      <stop offset="0.7" stop-color="#0b3055"/>
+      <stop offset="1" stop-color="#06233c"/>
+    </linearGradient>
+    <linearGradient id="hojas" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e8d9b4"/>
+      <stop offset="1" stop-color="#f7efdc"/>
+    </linearGradient>
+    <clipPath id="tapa">
+      <rect x="86" y="56" width="312" height="400" rx="16"/>
+    </clipPath>
+  </defs>
+
+  <!-- canto de las hojas, asomando por la derecha -->
+  <rect x="380" y="76" width="46" height="360" rx="10" fill="url(#hojas)"/>
+  <g stroke="#cbb98f" stroke-width="2" opacity="0.7">
+    <line x1="392" y1="92" x2="392" y2="420"/>
+    <line x1="404" y1="92" x2="404" y2="420"/>
+    <line x1="416" y1="92" x2="416" y2="420"/>
+  </g>
+
+  <!-- tapa -->
+  <rect x="86" y="56" width="312" height="400" rx="16" fill="url(#cuero)"/>
+
+  <!-- lomo con sus nervios dorados -->
+  <g clip-path="url(#tapa)">
+    <rect x="86" y="56" width="54" height="400" fill="url(#lomo)"/>
+    <g stroke="#d4a017" stroke-width="5" opacity="0.9">
+      <line x1="86" y1="132" x2="140" y2="132"/>
+      <line x1="86" y1="256" x2="140" y2="256"/>
+      <line x1="86" y1="380" x2="140" y2="380"/>
+    </g>
+    <rect x="136" y="56" width="6" height="400" fill="#04182b" opacity="0.55"/>
+  </g>
+  <rect x="86" y="56" width="312" height="400" rx="16" fill="none" stroke="#d4a017" stroke-width="7"/>
+
+  <!-- marco dorado de la portada -->
+  <rect x="158" y="94" width="216" height="324" rx="6" fill="none" stroke="#d4a017" stroke-width="5"/>
+  <rect x="170" y="106" width="192" height="300" rx="3" fill="none" stroke="#d4a017" stroke-width="2" opacity="0.65"/>
+
+  <!-- rosa de los vientos -->
+  <g transform="translate(266 182)" fill="#f5c842">
+    <path d="M0 -62 L14 -16 L0 -26 L-14 -16 Z"/>
+    <path d="M0 62 L14 16 L0 26 L-14 16 Z"/>
+    <path d="M-62 0 L-16 14 L-26 0 L-16 -14 Z"/>
+    <path d="M62 0 L16 14 L26 0 L16 -14 Z"/>
+    <circle cx="0" cy="0" r="9" fill="#f5ead5"/>
+  </g>
+
+  <!-- nombre en la portada -->
+  <text x="266" y="318" text-anchor="middle" fill="#f5c842"
+        font-family="'Liberation Serif','DejaVu Serif',serif" font-weight="700"
+        font-size="56" letter-spacing="1">GonMar</text>
+  <line x1="200" y1="346" x2="332" y2="346" stroke="#d4a017" stroke-width="4"/>
+  <text x="266" y="382" text-anchor="middle" fill="#d4a017" opacity="0.95"
+        font-family="'Liberation Serif','DejaVu Serif',serif" font-weight="700"
+        font-size="24" letter-spacing="5">BITÁCORA</text>
+</svg>
