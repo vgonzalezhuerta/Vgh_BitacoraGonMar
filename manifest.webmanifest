@@ -1,6 +1,6 @@
 {
-  "name": "Bitácoras de viaje",
-  "short_name": "Bitácoras",
+  "name": "GonMar · Bitácoras de viaje",
+  "short_name": "GonMar",
   "description": "Cuaderno de aventuras: itinerarios, reseñas, fotos y caza de tesoros de todos tus viajes.",
   "start_url": "./",
   "scope": "./",
