@@ -70,8 +70,8 @@ Abre la URL de GitHub Pages en Chrome o Edge de escritorio. Al servirse por `htt
 la barra superior (o menú ⋮ → Instalar). Al aceptarlo queda como una aplicación más, con su icono y su ventana
 propia, y recuerda la carpeta elegida entre sesiones.
 
-La primera vez que la abras con internet se guardan Leaflet, JSZip y las tipografías; a partir de ahí funciona
-sin conexión. Sin ellos guardados, el mapa interactivo y la copia ZIP avisan y el resto sigue funcionando.
+La primera vez que la abras con internet se guarda todo lo que necesita; a partir de ahí funciona sin conexión.
+Las tipografías van en el propio repositorio (`lib/fuentes/`), así que la app se ve igual con o sin internet.
 
 En el móvil no funciona: la API que lee carpetas del disco no existe en Android ni en iOS.
 

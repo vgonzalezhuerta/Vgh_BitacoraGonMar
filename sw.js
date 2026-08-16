@@ -1,7 +1,7 @@
 /* Bitácoras de viaje — service worker
    Guarda la app y sus librerías para que funcione sin conexión.
    Sube VERSION cada vez que cambies index.html. */
-const VERSION = 'bitacoras-v15';
+const VERSION = 'bitacoras-v16';
 const SHELL = [
   './',
   './index.html',

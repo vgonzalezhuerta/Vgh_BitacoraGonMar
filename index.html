@@ -13,7 +13,6 @@
 <meta name="apple-mobile-web-app-title" content="GonMar">
 <link rel="icon" href="icono-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="icono-apple.png">
-<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Alfa+Slab+One&family=Pacifico&family=Bebas+Neue&family=Rye&family=Lato:ital,wght@0,400;0,700;0,900;1,400&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <script>
 /* Librerías: primero la copia local de la carpeta (para uso sin conexión),
    y si no está, se descargan de internet. */
@@ -36,6 +35,18 @@
 })();
 </script>
 <style>
+/* Las tipografías salen de lib/fuentes, no de Google: así la app se ve igual sin conexión.
+   Solo se descarga la letra de titular del tema que esté en pantalla. */
+@font-face{font-family:'Lato';font-style:normal;font-weight:400;font-display:swap;src:url(lib/fuentes/lato-400.woff2) format('woff2')}
+@font-face{font-family:'Lato';font-style:italic;font-weight:400;font-display:swap;src:url(lib/fuentes/lato-400i.woff2) format('woff2')}
+@font-face{font-family:'Lato';font-style:normal;font-weight:700;font-display:swap;src:url(lib/fuentes/lato-700.woff2) format('woff2')}
+@font-face{font-family:'Lato';font-style:normal;font-weight:900;font-display:swap;src:url(lib/fuentes/lato-900.woff2) format('woff2')}
+@font-face{font-family:'Pirata One';font-style:normal;font-weight:400;font-display:swap;src:url(lib/fuentes/pirata-one.woff2) format('woff2')}
+@font-face{font-family:'Alfa Slab One';font-style:normal;font-weight:400;font-display:swap;src:url(lib/fuentes/alfa-slab-one.woff2) format('woff2')}
+@font-face{font-family:'Pacifico';font-style:normal;font-weight:400;font-display:swap;src:url(lib/fuentes/pacifico.woff2) format('woff2')}
+@font-face{font-family:'Bebas Neue';font-style:normal;font-weight:400;font-display:swap;src:url(lib/fuentes/bebas-neue.woff2) format('woff2')}
+@font-face{font-family:'Rye';font-style:normal;font-weight:400;font-display:swap;src:url(lib/fuentes/rye.woff2) format('woff2')}
+
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
 :root{
