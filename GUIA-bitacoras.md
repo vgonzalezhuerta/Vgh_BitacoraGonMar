@@ -125,8 +125,9 @@ mandarlo por WhatsApp, va como documento, no como foto.
 **🖼️ El póster** — un `poster-<viaje>.jpg` con el título, las fechas, quién fue y un mosaico de hasta nueve
 fotos repartidas por todo el viaje. Es lo que se ve directamente en un chat, sin que nadie tenga que abrir nada.
 
-En el móvil, después de generar cualquiera de los dos aparece un botón **📤 Compartir** que abre el menú de
-compartir de Android con el archivo ya listo.
+Al elegir una de las dos, el panel se cierra y el progreso va saliendo arriba: con muchas fotos tarda un rato,
+porque cada una se lee de la carpeta y se mete dentro del archivo. Cuando termina aparece abajo un aviso con el
+nombre del archivo y, en el móvil, un botón **📤 Compartir** que abre el menú de Android con él ya listo.
 
 El botón **📄 PDF** sigue donde estaba y hace lo de siempre: abre el diálogo de impresión. La maquetación es la
 misma que la del recuerdo, así que los dos se ven igual.
