@@ -6,6 +6,10 @@ sigue funcionando mientras haya conexión.
   leaflet.js      https://unpkg.com/leaflet@1.9.4/dist/leaflet.js
   jszip.min.js    https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js
   images/         las que pide leaflet.css (unpkg.com/leaflet@1.9.4/dist/images/)
+  fuentes/        Lato (400, 400 cursiva, 700, 900) y las cinco letras de titular:
+                  Pirata One, Alfa Slab One, Pacifico, Bebas Neue y Rye.
+                  Vienen de los paquetes @fontsource/<nombre> (subconjunto latin, woff2)
+                  y el recuerdo del viaje las incrusta dentro del HTML que genera.
 
 Los nombres deben ser exactamente esos. Para cambiar de versión, sustituye
 los archivos y actualiza también las direcciones del CDN en index.html.

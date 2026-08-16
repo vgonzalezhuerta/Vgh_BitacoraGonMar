@@ -2351,12 +2351,15 @@ function cuerpoRecuerdo(imgs) {
   return body;
 }
 
-function docRecuerdo(body) {
+function docRecuerdo(body, fuentes) {
   const tr = D.trip || {}, th = THEMES[tr.theme] || THEMES.crucero, v = th.vars;
   return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>${esc(tr.title || 'Bitácora')}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Alfa+Slab+One&family=Pacifico&family=Bebas+Neue&family=Rye&family=Lato:wght@400;700;900&display=swap" rel="stylesheet"><style>
+    ${fuentes
+      ? `<style>${fuentes}</style>`
+      : `<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Alfa+Slab+One&family=Pacifico&family=Bebas+Neue&family=Rye&family=Lato:wght@400;700;900&display=swap" rel="stylesheet">`}
+    <style>
     @page{size:A4;margin:14mm}
     *{box-sizing:border-box}
     body{font-family:Lato,'Segoe UI',sans-serif;color:#1a1208;font-size:11pt;line-height:1.5;margin:0}
@@ -2370,7 +2373,8 @@ function docRecuerdo(body) {
     .cover .stat{color:${v['--accent2']}}.cover .gen{font-size:8pt;color:#9fb8c9;margin-top:10pt}
     .day{page-break-before:always}
     .eyebrow{font-size:8pt;letter-spacing:.18em;text-transform:uppercase;color:${v['--line']}}
-    .tag{font-size:8pt;background:#d4edda;color:#1a5c1a;padding:1pt 4pt;border-radius:3pt;vertical-align:middle}
+    /* la etiqueta hereda del h2, y con la letra de títulos cargada se leía peor */
+    .tag{font-family:Lato,sans-serif;font-size:8pt;background:#d4edda;color:#1a5c1a;padding:1pt 4pt;border-radius:3pt;vertical-align:middle}
     .hours{color:${v['--warn']};font-weight:700;font-size:10pt}
     .fact{background:#fff3cd;border-left:3pt solid ${v['--accent']};padding:5pt 7pt;font-style:italic;margin:6pt 0}
     .alert{background:#ffe9c9;padding:4pt 6pt;border-radius:3pt;font-size:9.5pt;margin-bottom:5pt}
@@ -2408,6 +2412,64 @@ async function imagenesActuales() {
    Un viaje terminado merece quedarse en algo que se abra dentro de quince años
    sin esta app: una página con todo dentro, y un póster para enseñarlo de un vistazo. */
 let ultimoRecuerdo = null;   // { blob, nombre, tipo } de lo último generado, para compartirlo
+
+// Copias locales de las tipografías, para que el recuerdo se vea igual sin internet
+const ARCHIVO_FUENTE = {
+  'Pirata One': 'pirata-one', 'Alfa Slab One': 'alfa-slab-one', 'Pacifico': 'pacifico',
+  'Bebas Neue': 'bebas-neue', 'Rye': 'rye'
+};
+const LATO = [['400', 'normal', 'lato-400'], ['400', 'italic', 'lato-400i'],
+              ['700', 'normal', 'lato-700'], ['900', 'normal', 'lato-900']];
+
+// Nombre de la familia dentro de la pila del tema: "'Pirata One',cursive" → Pirata One
+const familiaDe = th => (String(th.display).match(/'([^']+)'/) || [])[1] || '';
+
+async function archivoBase64(ruta) {
+  try {
+    const r = await fetch(ruta);
+    if (!r.ok) return null;
+    const blob = await r.blob();
+    return await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result);
+      fr.onerror = () => rej(new Error('ilegible'));
+      fr.readAsDataURL(blob);
+    });
+  } catch (_) { return null; }
+}
+
+// Las @font-face con la letra dentro del propio archivo. Si algo falla, devuelve
+// cadena vacía y el documento vuelve a pedirlas a Google como antes.
+async function fuentesEmbebidas(th) {
+  const piezas = [];
+  const lista = LATO.map(([peso, estilo, archivo]) => ['Lato', peso, estilo, archivo]);
+  const familia = familiaDe(th), archivo = ARCHIVO_FUENTE[familia];
+  if (archivo) lista.push([familia, '400', 'normal', archivo]);
+
+  for (const [fam, peso, estilo, arch] of lista) {
+    const b64 = await archivoBase64(`lib/fuentes/${arch}.woff2`);
+    if (!b64) continue;
+    piezas.push(`@font-face{font-family:'${fam}';font-style:${estilo};font-weight:${peso};font-display:swap;src:url(${b64}) format('woff2')}`);
+  }
+  // sin la letra del título no merece la pena: se vería un documento a medias
+  return piezas.length >= LATO.length ? piezas.join('\n') : '';
+}
+
+// Para el póster, que se dibuja en un canvas con las fuentes de la página
+async function aseguraFuentes(th) {
+  if (!window.FontFace) return;
+  const familia = familiaDe(th), archivo = ARCHIVO_FUENTE[familia];
+  const pendientes = [['Lato', 'lato-400', '400', 'normal'], ['Lato', 'lato-700', '700', 'normal'],
+                      ['Lato', 'lato-900', '900', 'normal'], ['Lato', 'lato-400i', '400', 'italic']];
+  if (archivo) pendientes.push([familia, archivo, '400', 'normal']);
+  for (const [fam, arch, peso, estilo] of pendientes) {
+    try {
+      if (document.fonts.check(`${estilo} ${peso} 40px '${fam}'`)) continue;
+      const f = new FontFace(fam, `url(lib/fuentes/${arch}.woff2)`, { weight: peso, style: estilo });
+      document.fonts.add(await f.load());
+    } catch (_) { /* se queda la de respaldo */ }
+  }
+}
 
 // Todas las fotos del viaje: [archivo en la carpeta, clave con la que las pide la maquetación]
 function fotosDelViaje() {
@@ -2493,7 +2555,8 @@ async function generateKeepsake() {
       status(`Preparando el recuerdo… ${Math.min(i + 2, fotos.length)}/${fotos.length} fotos`);
     }
     const faltan = fotos.length - Object.keys(imgs).length;
-    const doc = docRecuerdo(cuerpoRecuerdo(imgs));
+    status('Metiendo las tipografías dentro…');
+    const doc = docRecuerdo(cuerpoRecuerdo(imgs), await fuentesEmbebidas(THEMES[D.trip?.theme] || THEMES.crucero));
     const blob = new Blob([doc], { type: 'text/html' });
     const nombre = `recuerdo-${D.trip?.id || tripDir.name}.html`;
     await writeFile(nombre, blob);
@@ -2536,6 +2599,7 @@ async function generatePoster() {
     }
 
     // La cabecera mide lo que ocupe el texto: si no, queda una banda vacía sobre el mosaico
+    await aseguraFuentes(th);
     try { await document.fonts.ready; } catch (_) { /* sin fuentes cargadas se usa la de respaldo */ }
     c.font = `64px ${th.display}, serif`;
     const líneas = partirTexto(c, tr.title || '', W_ - 120).slice(0, 2);
@@ -2594,7 +2658,8 @@ function partirTexto(c, texto, ancho) {
 async function generatePDF() {
   try {
     status('Generando documento…');
-    const doc = docRecuerdo(cuerpoRecuerdo(await imagenesActuales()));
+    const th = THEMES[D.trip?.theme] || THEMES.crucero;
+    const doc = docRecuerdo(cuerpoRecuerdo(await imagenesActuales()), await fuentesEmbebidas(th));
     const w = window.open('', '_blank');
     if (!w) { status('El navegador ha bloqueado la ventana. Permite las ventanas emergentes y vuelve a intentarlo.', true); return; }
     w.document.write(doc);

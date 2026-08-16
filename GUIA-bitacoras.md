@@ -112,9 +112,10 @@ regenerar el viaje desde el proyecto de Claude sin perder nada de lo vuestro.
 
 Cuando un viaje termina, el botón **🎁 Recuerdo** deja dos cosas en su carpeta:
 
-**📖 La página del viaje** — un archivo `recuerdo-<viaje>.html` con *todo* dentro: las fotos van incrustadas en
-el propio archivo, no enlazadas. Eso significa que se abre en cualquier navegador, en cualquier ordenador o
-móvil, sin internet, sin la app y sin la carpeta de fotos al lado. Se manda por WhatsApp o correo como un
+**📖 La página del viaje** — un archivo `recuerdo-<viaje>.html` con *todo* dentro: las fotos y también las
+tipografías van incrustadas en el propio archivo, no enlazadas. Eso significa que se abre en cualquier
+navegador, en cualquier ordenador o móvil, sin internet, sin la app y sin la carpeta de fotos al lado, y se ve
+exactamente igual que en la app. Se manda por WhatsApp o correo como un
 archivo más, se deja en Drive y se pasa el enlace, y se imprime con Ctrl+P (o *Compartir → Imprimir* en el
 móvil), que es de donde sale el PDF si lo quieres en papel.
 
