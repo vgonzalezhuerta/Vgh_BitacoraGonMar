@@ -14,7 +14,9 @@ Viajes/                          ← carpeta raíz (la eliges una vez en la app)
 │   ├─ mapa.jpg                  ← opcional, mapa ilustrado de la ruta
 │   ├─ portada.jpg               ← opcional, portada en la biblioteca
 │   ├─ foto_dia3_....jpg         ← fotos del diario (las crea la app)
-│   └─ captura_2-0_....jpg       ← pruebas de capturas (las crea la app)
+│   ├─ captura_2-0_....jpg       ← pruebas de capturas (las crea la app)
+│   ├─ recuerdo-....html         ← el recuerdo del viaje, si lo generas
+│   └─ poster-....jpg            ← el póster para compartir, si lo generas
 ├─ pirineos-2027/
 │   └─ bitacora.json
 ├─ roma-2027/
@@ -105,6 +107,28 @@ su globo tiene un enlace para saltar al día en el diario. Salen también en el 
 **La ruta preparada no se toca nunca.** Los pasos de `route` siguen siendo lo que se planeó; esto se guarda
 aparte, en `moments` del `bitacora.json`. Así se puede ver a la vez lo previsto y lo que pasó de verdad, y
 regenerar el viaje desde el proyecto de Claude sin perder nada de lo vuestro.
+
+## El recuerdo del viaje
+
+Cuando un viaje termina, el botón **🎁 Recuerdo** deja dos cosas en su carpeta:
+
+**📖 La página del viaje** — un archivo `recuerdo-<viaje>.html` con *todo* dentro: las fotos van incrustadas en
+el propio archivo, no enlazadas. Eso significa que se abre en cualquier navegador, en cualquier ordenador o
+móvil, sin internet, sin la app y sin la carpeta de fotos al lado. Se manda por WhatsApp o correo como un
+archivo más, se deja en Drive y se pasa el enlace, y se imprime con Ctrl+P (o *Compartir → Imprimir* en el
+móvil), que es de donde sale el PDF si lo quieres en papel.
+
+Ojo al tamaño: las fotos se meten a 1100 px, así que un viaje con muchas fotos puede pasar de 20 MB. Para
+mandarlo por WhatsApp, va como documento, no como foto.
+
+**🖼️ El póster** — un `poster-<viaje>.jpg` con el título, las fechas, quién fue y un mosaico de hasta nueve
+fotos repartidas por todo el viaje. Es lo que se ve directamente en un chat, sin que nadie tenga que abrir nada.
+
+En el móvil, después de generar cualquiera de los dos aparece un botón **📤 Compartir** que abre el menú de
+compartir de Android con el archivo ya listo.
+
+El botón **📄 PDF** sigue donde estaba y hace lo de siempre: abre el diálogo de impresión. La maquetación es la
+misma que la del recuerdo, así que los dos se ven igual.
 
 ## Al tocar la app
 

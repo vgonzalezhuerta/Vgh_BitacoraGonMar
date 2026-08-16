@@ -241,6 +241,20 @@ textarea:focus{outline:none;border-color:var(--accent)}
 /* mientras se espera el toque en el mapa */
 #leaflet-map.picking{outline:3px solid var(--accent);cursor:crosshair}
 
+/* ───── RECUERDO ───── */
+.recu-fondo{position:fixed;inset:0;background:rgba(4,14,26,.88);z-index:90;display:flex;align-items:center;
+  justify-content:center;padding:1rem;overflow:auto}
+.recu-caja{background:var(--paper);border:3px solid var(--line);border-radius:12px;padding:1.1rem;
+  max-width:430px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.6)}
+.recu-caja h2{font-family:var(--display);color:var(--panel);font-size:1.5rem;margin-bottom:.2rem}
+.recu-op{display:block;width:100%;text-align:left;background:#fff8ea;border:2px solid #d9c99f;
+  border-radius:10px;padding:.7rem .8rem;margin-top:.7rem}
+.recu-op b{display:block;color:var(--panel);font-size:.95rem;margin-bottom:.15rem}
+.recu-op span{font-size:.8rem;color:#5c5142;line-height:1.35;display:block}
+.recu-ok{background:var(--ok-bg);border:2px solid var(--ok);border-radius:8px;padding:.5rem .6rem;
+  margin-top:.7rem;font-size:.82rem;color:var(--ok)}
+.recu-ok .tb-btn{margin-top:.4rem}
+
 /* ───── ÁLBUM DE VACACIONES ───── */
 .alb-sum{text-align:center;color:#a8cce0;font-style:italic;font-size:.86rem;margin:-.4rem 0 1rem}
 .alb-card{background:var(--paper);border:3px solid var(--line);border-radius:12px;padding:1rem;
@@ -321,6 +335,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
   <button class="tb-btn primary" id="btn-root" onclick="pickRoot()">📁 Elegir carpeta</button>
   <button class="tb-btn" id="btn-library" onclick="showLibrary()" style="display:none">🗂️ Mis viajes</button>
   <button class="tb-btn" id="btn-pdf" onclick="generatePDF()" style="display:none">📄 PDF</button>
+  <button class="tb-btn" id="btn-recuerdo" onclick="showKeepsake()" style="display:none">🎁 Recuerdo</button>
   <button class="tb-btn" id="btn-zip" onclick="exportZip()" style="display:none">⬇ Copia</button>
   <button class="tb-btn" id="btn-install" onclick="installApp()" style="display:none">⬛ Instalar</button>
   <button class="tb-btn" id="btn-retry" onclick="retryPending()" title="Reintentar imágenes que faltan" style="display:none">↻</button>
@@ -573,7 +588,7 @@ function tripCard(t, i) {
 async function showLibrary() {
   tripDir = null; D = null;
   applyTheme('crucero');
-  el('btn-pdf').style.display = el('btn-zip').style.display = 'none';
+  el('btn-pdf').style.display = el('btn-zip').style.display = el('btn-recuerdo').style.display = 'none';
   el('btn-library').style.display = 'none';
   el('score-bar').style.display = 'none';
 
@@ -685,7 +700,7 @@ const fmtDate = iso => {
 async function showMoments() {
   tripDir = null; D = null; momDraft = null;
   applyTheme('crucero');
-  el('btn-pdf').style.display = el('btn-zip').style.display = 'none';
+  el('btn-pdf').style.display = el('btn-zip').style.display = el('btn-recuerdo').style.display = 'none';
   el('btn-library').style.display = 'none';
   el('score-bar').style.display = 'none';
 
@@ -1181,7 +1196,7 @@ function repinta() { return esAlbum(D) ? renderAlbum() : renderTrip(); }
 
 function renderTrip() {
   const tr = D.trip || {}, th = applyTheme(tr.theme);
-  el('btn-pdf').style.display = el('btn-zip').style.display = el('btn-library').style.display = '';
+  el('btn-pdf').style.display = el('btn-zip').style.display = el('btn-recuerdo').style.display = el('btn-library').style.display = '';
   el('score-bar').style.display = '';
   document.title = 'Bitácora · ' + (tr.title || '');
 
@@ -1848,7 +1863,7 @@ const entradas = () => (D.entries || []).slice().sort((a, b) => (a.date || '9999
 
 function renderAlbum() {
   const tr = D.trip || {}, th = applyTheme(tr.theme);
-  el('btn-pdf').style.display = el('btn-zip').style.display = el('btn-library').style.display = '';
+  el('btn-pdf').style.display = el('btn-zip').style.display = el('btn-recuerdo').style.display = el('btn-library').style.display = '';
   el('score-bar').style.display = '';
   document.title = 'Bitácora · ' + (tr.title || '');
 
@@ -2255,15 +2270,10 @@ async function toDataURL(url) {
   return await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
 }
 
-async function generatePDF() {
-  status('Generando documento…');
-  const tr = D.trip || {}, th = THEMES[tr.theme] || THEMES.crucero, v = th.vars;
-  const imgs = {};
-  for (const k of Object.keys(urls)) {
-    try { imgs[k] = await toDataURL(await loadFull(k) || urls[k]); }
-    catch (_) { try { imgs[k] = await toDataURL(urls[k]); } catch (__) {} }
-  }
-
+// El documento del recuerdo: la misma maquetación para imprimir y para guardar como archivo.
+// `imgs` va indexado por las mismas claves que `urls`, con las fotos ya en data:URI.
+function cuerpoRecuerdo(imgs) {
+  const tr = D.trip || {}, th = THEMES[tr.theme] || THEMES.crucero;
   let totalC = 0, totalP = 0, totalT = 0, totalM = 0, rows = '';
   (D.days || []).forEach((d, i) => {
     const items = d.hunt?.items || []; if (!items.length) return;
@@ -2338,13 +2348,20 @@ async function generatePDF() {
     <tr><th>${esc(W('stopSingular', 'Parada'))}</th><th>Capturas</th><th>Puntos</th><th>Máx.</th></tr>
     ${rows}<tr class="tot"><td>TOTAL</td><td>${totalC}/${totalT}</td><td>${totalP}</td><td>${totalM}</td></tr></table></section>`;
 
-  const w = window.open('', '_blank');
-  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${esc(tr.title || 'Bitácora')}</title>
+  return body;
+}
+
+function docRecuerdo(body) {
+  const tr = D.trip || {}, th = THEMES[tr.theme] || THEMES.crucero, v = th.vars;
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>${esc(tr.title || 'Bitácora')}</title>
     <link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Alfa+Slab+One&family=Pacifico&family=Bebas+Neue&family=Rye&family=Lato:wght@400;700;900&display=swap" rel="stylesheet"><style>
     @page{size:A4;margin:14mm}
-    body{font-family:Lato,sans-serif;color:#1a1208;font-size:11pt;line-height:1.5}
-    h1{font-family:${th.display};font-size:34pt;color:${v['--accent2']}}
-    h2{font-family:${th.display};font-size:20pt;color:${v['--panel']};margin:.2em 0}
+    *{box-sizing:border-box}
+    body{font-family:Lato,'Segoe UI',sans-serif;color:#1a1208;font-size:11pt;line-height:1.5;margin:0}
+    h1{font-family:${th.display},serif;font-size:34pt;color:${v['--accent2']}}
+    h2{font-family:${th.display},serif;font-size:20pt;color:${v['--panel']};margin:.2em 0}
     h3{font-size:11pt;text-transform:uppercase;letter-spacing:.08em;color:${v['--line']};border-bottom:1px solid ${v['--line']};margin:14pt 0 6pt}
     .cover{background:${v['--panel']};color:#fff;text-align:center;padding:60mm 10mm;page-break-after:always}
     .cover-icon{font-size:40pt}.cover .sub{font-style:italic;color:#cfe3f0}
@@ -2366,10 +2383,225 @@ async function generatePDF() {
     ul.hunt li.done{font-weight:700}.proof{width:80pt;border-radius:4pt;border:1.5pt solid ${v['--accent']}}
     table{width:100%;border-collapse:collapse;font-size:10pt}th{background:${v['--panel']};color:${v['--accent2']};text-align:left;padding:4pt}
     td{padding:3pt 4pt;border-bottom:.5pt solid #ddd}tr.tot td{font-weight:900;border-top:1.5pt solid ${v['--line']}}
-    </style></head><body>${body}</body></html>`);
-  w.document.close();
-  w.onload = () => setTimeout(() => w.print(), 700);
-  status('✓ Documento listo — elige "Guardar como PDF"');
+    /* en pantalla se lee como una página; al imprimir manda el @page */
+    @media screen{
+      body{background:#d8cfb8;padding:16px}
+      .doc{max-width:820px;margin:0 auto;background:#fff;box-shadow:0 6px 30px rgba(0,0,0,.3)}
+      .doc>section{padding:22px 26px}
+      .cover{padding:70px 26px}
+      .gal img{width:32%}
+    }
+    </style></head><body><div class="doc">${body}</div></body></html>`;
+}
+
+// Las fotos tal como están cargadas ahora: para el PDF, que se imprime al momento
+async function imagenesActuales() {
+  const imgs = {};
+  for (const k of Object.keys(urls)) {
+    try { imgs[k] = await toDataURL(await loadFull(k) || urls[k]); }
+    catch (_) { try { imgs[k] = await toDataURL(urls[k]); } catch (__) {} }
+  }
+  return imgs;
+}
+
+/* ─── RECUERDO DEL VIAJE ───
+   Un viaje terminado merece quedarse en algo que se abra dentro de quince años
+   sin esta app: una página con todo dentro, y un póster para enseñarlo de un vistazo. */
+let ultimoRecuerdo = null;   // { blob, nombre, tipo } de lo último generado, para compartirlo
+
+// Todas las fotos del viaje: [archivo en la carpeta, clave con la que las pide la maquetación]
+function fotosDelViaje() {
+  const lista = [];
+  Object.entries(D.photoFiles || {}).forEach(([k, f]) => lista.push([f, k]));
+  Object.entries(D.statueFiles || {}).forEach(([k, f]) => lista.push([f, 's-' + k]));
+  Object.values(D.moments || {}).forEach(ms => ms.forEach(m => (m.photos || []).forEach(f => lista.push([f, momKey(f)]))));
+  (D.entries || []).forEach(e => (e.photos || []).forEach(f => lista.push([f, momKey(f)])));
+  if (D.map?.staticImage) lista.push([D.map.staticImage, 'mapimg']);
+  if (D.trip?.coverImage) lista.push([D.trip.coverImage, 'cover']);
+  return lista;
+}
+
+async function fotoDataURL(nombre, max, calidad) {
+  const file = await (await tripDir.getFileHandle(nombre)).getFile();
+  const blob = await compressImage(file, max, max, calidad);
+  return await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => rej(new Error('no se pudo leer ' + nombre));
+    r.readAsDataURL(blob);
+  });
+}
+
+function showKeepsake() {
+  ultimoRecuerdo = null;
+  const caja = document.createElement('div');
+  caja.className = 'recu-fondo';
+  caja.id = 'recu';
+  caja.innerHTML = `<div class="recu-caja">
+    <h2>🎁 Recuerdo del viaje</h2>
+    <p class="muted">Se guarda en la carpeta del viaje, junto a las fotos.</p>
+    <button class="recu-op" onclick="generateKeepsake()">
+      <b>📖 La página del viaje</b>
+      <span>Un archivo HTML con todo dentro: fotos, reseñas y el diario entero. Se abre en cualquier
+      navegador sin internet y sin la app, se manda por WhatsApp o correo, y se imprime con Ctrl+P.</span></button>
+    <button class="recu-op" onclick="generatePoster()">
+      <b>🖼️ El póster para compartir</b>
+      <span>Una sola imagen con el título, las fechas y un mosaico de fotos. Es lo que se ve directamente
+      en un chat, sin abrir nada.</span></button>
+    <div id="recu-hecho"></div>
+    <div class="row end"><button class="tb-btn" onclick="closeKeepsake()">Cerrar</button></div>
+  </div>`;
+  document.body.appendChild(caja);
+}
+
+function closeKeepsake() {
+  const c = el('recu');
+  if (c) c.remove();
+}
+
+// Compartir necesita un toque reciente del usuario, así que se ofrece como botón aparte
+function ofrecerCompartir(blob, nombre, tipo, cuánto) {
+  ultimoRecuerdo = { blob, nombre, tipo };
+  const caja = el('recu-hecho');
+  if (!caja) return;
+  const puede = navigator.canShare && navigator.canShare({ files: [new File([blob], nombre, { type: tipo })] });
+  caja.innerHTML = `<div class="recu-ok">✓ Guardado <b>${esc(nombre)}</b> en la carpeta del viaje${cuánto ? ` (${cuánto})` : ''}
+    ${puede ? `<button class="tb-btn primary" onclick="compartirRecuerdo()">📤 Compartir</button>` : ''}</div>`;
+}
+
+async function compartirRecuerdo() {
+  if (!ultimoRecuerdo) return;
+  const { blob, nombre, tipo } = ultimoRecuerdo;
+  try {
+    await navigator.share({ files: [new File([blob], nombre, { type: tipo })], title: D.trip?.title || 'Bitácora' });
+  } catch (e) {
+    if (e.name !== 'AbortError') status('No se pudo compartir: ' + e.message, true);
+  }
+}
+
+async function generateKeepsake() {
+  try {
+    if (!await ensurePermission(tripDir)) { status('Sin permiso de escritura en la carpeta', true); return; }
+    const fotos = fotosDelViaje();
+    const imgs = {};
+    // De dos en dos, como el resto de lecturas: Drive en Android sirve los archivos de uno en uno
+    for (let i = 0; i < fotos.length; i += 2) {
+      const lote = fotos.slice(i, i + 2);
+      await Promise.all(lote.map(async ([f, k]) => {
+        try { imgs[k] = await fotoDataURL(f, 1100, 0.72); } catch (_) { /* la foto que falte se omite */ }
+      }));
+      status(`Preparando el recuerdo… ${Math.min(i + 2, fotos.length)}/${fotos.length} fotos`);
+    }
+    const faltan = fotos.length - Object.keys(imgs).length;
+    const doc = docRecuerdo(cuerpoRecuerdo(imgs));
+    const blob = new Blob([doc], { type: 'text/html' });
+    const nombre = `recuerdo-${D.trip?.id || tripDir.name}.html`;
+    await writeFile(nombre, blob);
+    const mb = (blob.size / 1048576).toFixed(1) + ' MB';
+    ofrecerCompartir(blob, nombre, 'text/html', mb);
+    status(faltan ? `✓ Recuerdo guardado (${mb}) · ${faltan} foto(s) no se pudieron leer` : `✓ Recuerdo guardado (${mb})`, !!faltan);
+  } catch (e) { status('No se pudo crear el recuerdo: ' + e.message, true); }
+}
+
+async function generatePoster() {
+  try {
+    if (!await ensurePermission(tripDir)) { status('Sin permiso de escritura en la carpeta', true); return; }
+    status('Componiendo el póster…');
+    const tr = D.trip || {}, th = THEMES[tr.theme] || THEMES.crucero, v = th.vars;
+
+    // hasta 9 fotos repartidas por todo el viaje, no las 9 primeras
+    const todas = fotosDelViaje().filter(([, k]) => k !== 'mapimg' && k !== 'cover').map(([f]) => f);
+    const paso = Math.max(1, Math.floor(todas.length / 9));
+    const elegidas = todas.filter((_, i) => i % paso === 0).slice(0, 9);
+
+    const W_ = 1080, H = 1350, cv = document.createElement('canvas');
+    cv.width = W_; cv.height = H;
+    const c = cv.getContext('2d');
+    const grad = c.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, v['--panel']); grad.addColorStop(1, v['--bg']);
+    c.fillStyle = grad; c.fillRect(0, 0, W_, H);
+
+    const imagenes = [];
+    for (const nombre of elegidas) {
+      try {
+        const file = await (await tripDir.getFileHandle(nombre)).getFile();
+        const url = URL.createObjectURL(await compressImage(file, 700, 700, 0.8));
+        imagenes.push(await new Promise((res, rej) => {
+          const im = new Image();
+          im.onload = () => res(im);
+          im.onerror = () => rej(new Error('imagen ilegible'));
+          im.src = url;
+        }));
+      } catch (_) { /* se salta */ }
+    }
+
+    // La cabecera mide lo que ocupe el texto: si no, queda una banda vacía sobre el mosaico
+    try { await document.fonts.ready; } catch (_) { /* sin fuentes cargadas se usa la de respaldo */ }
+    c.font = `64px ${th.display}, serif`;
+    const líneas = partirTexto(c, tr.title || '', W_ - 120).slice(0, 2);
+    const yTitulo = 200, ySub = yTitulo + (líneas.length - 1) * 70 + 74, yCrew = ySub + 46;
+    const cabecera = Math.min(yCrew + 56, 620), hueco = 10;
+    const cols = imagenes.length <= 1 ? 1 : imagenes.length <= 4 ? 2 : 3;
+    const filas = Math.ceil(imagenes.length / cols) || 1;
+    const cw = (W_ - hueco * (cols + 1)) / cols, ch = (H - cabecera - hueco * (filas + 1)) / filas;
+    imagenes.forEach((im, i) => {
+      const x = hueco + (i % cols) * (cw + hueco), y = cabecera + hueco + Math.floor(i / cols) * (ch + hueco);
+      const r = Math.max(cw / im.width, ch / im.height);
+      const w = im.width * r, h = im.height * r;
+      c.save();
+      c.beginPath(); c.rect(x, y, cw, ch); c.clip();
+      c.drawImage(im, x + (cw - w) / 2, y + (ch - h) / 2, w, h);
+      c.restore();
+    });
+
+    c.textAlign = 'center';
+    c.fillStyle = v['--accent2'];
+    c.font = `64px ${th.display}, serif`;
+    líneas.forEach((l, i) => c.fillText(l, W_ / 2, yTitulo + i * 70));
+    c.fillStyle = '#cfe3f0';
+    c.font = 'italic 30px Lato, sans-serif';
+    c.fillText((tr.subtitle || '').slice(0, 60), W_ / 2, ySub);
+    c.fillStyle = v['--accent'];
+    c.font = '900 26px Lato, sans-serif';
+    c.fillText((tr.crew || []).join(' · ').toUpperCase().slice(0, 60), W_ / 2, yCrew);
+    c.font = '80px serif';
+    c.fillText(th.icon, W_ / 2, 112);
+    c.strokeStyle = v['--accent']; c.lineWidth = 10;
+    c.strokeRect(5, 5, W_ - 10, H - 10);
+
+    const blob = await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.86));
+    if (!blob) { status('No se pudo componer el póster', true); return; }
+    const nombre = `poster-${tr.id || tripDir.name}.jpg`;
+    await writeFile(nombre, blob);
+    ofrecerCompartir(blob, nombre, 'image/jpeg', (blob.size / 1048576).toFixed(1) + ' MB');
+    status(imagenes.length ? '✓ Póster guardado' : '✓ Póster guardado (el viaje aún no tiene fotos)', !imagenes.length);
+  } catch (e) { status('No se pudo crear el póster: ' + e.message, true); }
+}
+
+function partirTexto(c, texto, ancho) {
+  const palabras = (texto || '').split(' ');
+  const líneas = [];
+  let actual = '';
+  for (const p of palabras) {
+    const prueba = actual ? actual + ' ' + p : p;
+    if (c.measureText(prueba).width > ancho && actual) { líneas.push(actual); actual = p; }
+    else actual = prueba;
+  }
+  if (actual) líneas.push(actual);
+  return líneas;
+}
+
+async function generatePDF() {
+  try {
+    status('Generando documento…');
+    const doc = docRecuerdo(cuerpoRecuerdo(await imagenesActuales()));
+    const w = window.open('', '_blank');
+    if (!w) { status('El navegador ha bloqueado la ventana. Permite las ventanas emergentes y vuelve a intentarlo.', true); return; }
+    w.document.write(doc);
+    w.document.close();
+    w.onload = () => setTimeout(() => w.print(), 700);
+    status('✓ Documento listo — elige "Guardar como PDF"');
+  } catch (e) { status('No se pudo generar el documento: ' + e.message, true); }
 }
 
 /* ─── INSTALACIÓN (PWA) Y VERSIÓN ─── */

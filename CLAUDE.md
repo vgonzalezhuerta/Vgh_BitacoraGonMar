@@ -70,7 +70,10 @@ Bloques principales, en orden dentro del `<script>`:
   Android sirve los archivos de uno en uno y con más concurrencia caducan.
 - **Guardado** — `save()` (con debounce), `writeFile(name, blob, dir)`.
 - **Mapa** — Leaflet, `initMap()`. Las rutas a pie aparecen al superar cierto zoom.
-- **PDF** — `generatePDF()` abre una ventana maquetada y lanza el diálogo de impresión.
+- **Recuerdo** — `cuerpoRecuerdo()` y `docRecuerdo()` arman el documento del viaje (portada, días o tarjetas,
+  diario, momentos, marcador). De ahí salen tres cosas: `generatePDF()` lo abre en una ventana y lanza el
+  diálogo de impresión; `generateKeepsake()` guarda un HTML autocontenido con las fotos en `data:`;
+  `generatePoster()` compone un JPG en un canvas. Si se toca la maquetación, cambia en los tres a la vez.
 
 ## Al terminar cualquier cambio
 
