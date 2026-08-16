@@ -241,6 +241,21 @@ textarea:focus{outline:none;border-color:var(--accent)}
 /* mientras se espera el toque en el mapa */
 #leaflet-map.picking{outline:3px solid var(--accent);cursor:crosshair}
 
+/* ───── ÁLBUM DE VACACIONES ───── */
+.alb-sum{text-align:center;color:#a8cce0;font-style:italic;font-size:.86rem;margin:-.4rem 0 1rem}
+.alb-card{background:var(--paper);border:3px solid var(--line);border-radius:12px;padding:1rem;
+  margin-bottom:1.1rem;box-shadow:0 4px 18px rgba(0,0,0,.35)}
+.alb-head{border-bottom:2px solid #d9c99f;padding-bottom:.5rem;margin-bottom:.6rem}
+.alb-title{font-family:var(--display);font-size:1.6rem;color:var(--panel);line-height:1.15}
+/* solo la inicial: 'capitalize' pondría "1 De Julio De 2026" */
+.alb-date{font-size:.78rem;color:#7a6a52;font-weight:700}
+.alb-date::first-letter{text-transform:uppercase}
+.alb-text{font-size:.94rem;white-space:pre-wrap;margin-bottom:.5rem}
+.alb-vacio{background:var(--paper);border:3px dashed var(--line);border-radius:12px;padding:1.4rem;
+  text-align:center;margin-bottom:1.1rem}
+.alb-vacio h2{font-family:var(--display);color:var(--panel);font-size:1.4rem;margin-bottom:.4rem}
+.alb-vacio p{font-size:.9rem;color:#5c5142}
+
 /* ───── SCOREBOARD ───── */
 .score-table{width:100%;border-collapse:collapse;font-size:.85rem}
 .score-table th{background:var(--panel);color:var(--accent2);text-align:left;padding:.4rem .5rem;font-family:var(--display);font-weight:400;font-size:1rem}
@@ -504,6 +519,26 @@ async function scanTrips() {
 function tripCard(t, i) {
   const tr = t.data.trip || {}, th = THEMES[tr.theme] || THEMES.crucero;
   const days = t.data.days || [], est = t.status;
+
+  // un viaje de vacaciones no tiene itinerario que medir: cuenta lo que ya se ha vivido
+  if (esAlbum(t.data)) {
+    const tarjetas = (t.data.entries || []).length;
+    const fotos = (t.data.entries || []).reduce((n, e) => n + (e.photos || []).length, 0);
+    const falta = est === 'pendiente' ? cuantoFalta(tr.startDate || '') : '';
+    const pill = est === 'hecho' ? '' : `<span class="estado ${est}">${est === 'curso' ? 'en curso' : 'pendiente'}</span>`;
+    return `<button class="trip-card ${est}" onclick="openTrip(${i})">
+      <div class="trip-cover" id="cover-${i}" style="background:${th.vars['--panel']}">
+        <span>${th.icon}</span>${pill}<span class="badge">vacaciones</span></div>
+      <div class="trip-body">
+        <div class="trip-name">${esc(tr.title || t.folder)}</div>
+        <div class="trip-dates">${esc(tr.subtitle || '')}</div>
+        <div class="trip-meta">
+          <span>📸 ${tarjetas} tarjeta${tarjetas === 1 ? '' : 's'}</span>
+          <span>🖼 ${fotos} foto${fotos === 1 ? '' : 's'}</span>
+          ${falta ? `<span>⏳ ${falta}</span>` : ''}</div>
+      </div></button>`;
+  }
+
   const vis = (t.data.visited || []).filter(Boolean).length;
   const pct = days.length ? Math.round(vis / days.length * 100) : 0;
   let pts = 0, caught = 0, max = 0, objetivos = 0;
@@ -565,7 +600,8 @@ async function showLibrary() {
       <div class="lib-empty">
         <h2>Aún no hay bitácoras aquí</h2>
         <p>Crea una subcarpeta por viaje y pon dentro su <code>bitacora.json</code>. Vuelve y pulsa Actualizar.</p>
-        <button class="tb-btn primary" onclick="refreshLibrary()">🔄 Actualizar</button>
+        <button class="tb-btn primary" onclick="newAlbumTrip()">🏖️ Nuevo viaje de vacaciones</button>
+        <button class="tb-btn" onclick="refreshLibrary()">🔄 Actualizar</button>
         <button class="tb-btn" onclick="pickRoot()">Cambiar de carpeta</button>
       </div></div>`;
     return;
@@ -587,6 +623,7 @@ async function showLibrary() {
     <div class="lib-title">Bitácoras</div>
     ${tabs('viajes')}
     <div class="lib-sub">${tripHandles.length} viaje${tripHandles.length > 1 ? 's' : ''} en ${esc(rootHandle.name)} · <a href="#" onclick="refreshLibrary();return false" style="color:#a8cce0">actualizar</a></div>
+    <button class="tb-btn primary big" onclick="newAlbumTrip()">🏖️ Nuevo viaje de vacaciones</button>
     ${grupos}</div>`;
 
   // portadas
@@ -884,13 +921,15 @@ async function openTrip(i) {
     D = t.data;
     if (!D.visited) D.visited = [];
     ['journals', 'caught', 'photoFiles', 'statueFiles', 'moments'].forEach(k => { if (!D[k]) D[k] = {}; });
-    dayDraft = null; cancelPick();
+    dayDraft = null; albumDraft = null; cancelPick();
 
-    if (!Array.isArray(D.days) || !D.days.length) { renderOldFormat(t); return; }
+    const album = esAlbum(D);
+    if (album && !Array.isArray(D.entries)) D.entries = [];
+    if (!album && (!Array.isArray(D.days) || !D.days.length)) { renderOldFormat(t); return; }
 
     urls = {}; fullUrls = {}; pending = [];
     el('btn-retry').style.display = 'none';
-    renderTrip();
+    repinta();
     if (window.scrollTo) window.scrollTo(0, 0);
     loadMedia().catch(e => { console.error(e); status('Las imágenes no se han podido cargar: ' + (e.message || e), true); });
   } catch (e) {
@@ -1028,6 +1067,7 @@ async function loadMedia() {
   for (const [key, file] of Object.entries(data.statueFiles)) jobs.push([file, 's-' + key, false]);
   for (const lista of Object.values(data.moments || {}))
     for (const m of lista) for (const f of (m.photos || [])) jobs.push([f, 'mom-' + f, false]);
+  for (const e of (data.entries || [])) for (const f of (e.photos || [])) jobs.push([f, 'mom-' + f, false]);
   if (data.map?.staticImage) jobs.push([data.map.staticImage, 'mapimg', true]);
   if (data.trip?.coverImage) jobs.push([data.trip.coverImage, 'cover', true]);
   if (!jobs.length) return;
@@ -1040,7 +1080,7 @@ async function loadMedia() {
   }));
   if (D !== data) return;
   const hits = cached.filter(Boolean).length;
-  if (hits) renderTrip();
+  if (hits) repinta();
   const missing = jobs.filter((_, i) => !cached[i]);
   if (!missing.length) { status('✓ Viaje abierto'); return; }
 
@@ -1062,7 +1102,7 @@ async function loadMedia() {
   }
   if (D !== data) return;
   const failed = pending.length;
-  renderTrip();
+  repinta();
   el('btn-retry').style.display = failed ? '' : 'none';
   if (failed) status(`✓ Listo · faltan ${failed} imagen(es) — pulsa ↻ para reintentarlas`, true);
   else if (cacheMode === 'none') status('✓ Listo · este navegador no deja guardar caché aquí', true);
@@ -1093,6 +1133,7 @@ async function readPending([name, key, big]) {
 
 // Repinta solo las miniaturas ya disponibles, sin reconstruir la página entera
 function refreshImages() {
+  if (esAlbum(D)) { renderAlbumList(); refreshAlbumMarkers(); return; }
   (D.days || []).forEach((d, i) => {
     renderPhotos(i);
     renderDayMoments(i);
@@ -1134,6 +1175,9 @@ async function loadFull(key) {
 
 /* ─── RENDER DEL VIAJE ─── */
 function W(key, fallback) { return (D.trip?.wording || {})[key] || fallback; }
+
+// Un viaje se pinta como itinerario o como álbum, según lo que traiga su bitacora.json
+function repinta() { return esAlbum(D) ? renderAlbum() : renderTrip(); }
 
 function renderTrip() {
   const tr = D.trip || {}, th = applyTheme(tr.theme);
@@ -1459,7 +1503,7 @@ async function deleteStatue(i, j) {
    Lo que de verdad pasó, al margen de la ruta preparada: un sitio que no estaba
    en el plan, una merienda, un rato que merece recordarse. Nunca toca `route`. */
 let dayDraft = null;      // momento que se está escribiendo
-let mapPickDay = null;    // día que espera un toque en el mapa
+let picking = null;       // { draft, después } mientras se espera un toque en el mapa
 
 const dayMoments = i => (D.moments && D.moments[i]) || [];
 const momKey = f => 'mom-' + f;
@@ -1554,13 +1598,18 @@ function clearDayLoc() {
 
 function locateHere() {
   syncDayDraft();
+  locate(dayDraft, () => renderDayMoments(dayDraft.day));
+}
+
+// Ubicación por GPS. Vale igual para un momento de un día y para una tarjeta de vacaciones.
+function locate(draft, después) {
   if (!navigator.geolocation) { status('Este navegador no sabe decir dónde estás', true); return; }
   status('Buscando dónde estás…');
   navigator.geolocation.getCurrentPosition(pos => {
-    if (!dayDraft) return;
-    dayDraft.lat = +pos.coords.latitude.toFixed(6);
-    dayDraft.lng = +pos.coords.longitude.toFixed(6);
-    renderDayMoments(dayDraft.day);
+    if (!draft) return;
+    draft.lat = +pos.coords.latitude.toFixed(6);
+    draft.lng = +pos.coords.longitude.toFixed(6);
+    después();
     status('✓ Ubicación tomada');
   }, err => {
     const causa = err.code === err.PERMISSION_DENIED ? 'no has dado permiso de ubicación'
@@ -1572,36 +1621,41 @@ function locateHere() {
 
 function pickOnMap() {
   syncDayDraft();
+  const i = dayDraft.day;
+  startPick(dayDraft, () => { renderDayMoments(i); goToDay(i); });
+}
+
+// El siguiente toque en el mapa deja sus coordenadas en `draft` y llama a `después`
+function startPick(draft, después) {
   const box = el('leaflet-map');
   if (!mapObj || !box) { status('El mapa no está disponible en este viaje', true); return; }
-  mapPickDay = dayDraft.day;
+  picking = { draft, después };
   box.classList.add('picking');
   status('Toca en el mapa el sitio exacto');
   box.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function cancelPick() {
-  mapPickDay = null;
+  picking = null;
   const box = el('leaflet-map');
   if (box) box.classList.remove('picking');
 }
 
 function mapPicked(e) {
-  if (mapPickDay == null || !dayDraft) return;
-  dayDraft.lat = +e.latlng.lat.toFixed(6);
-  dayDraft.lng = +e.latlng.lng.toFixed(6);
-  const i = mapPickDay;
+  if (!picking) return;
+  const { draft, después } = picking;
+  draft.lat = +e.latlng.lat.toFixed(6);
+  draft.lng = +e.latlng.lng.toFixed(6);
   cancelPick();
   if (mapObj) mapObj.closePopup();
-  renderDayMoments(i);
-  goToDay(i);
+  después();
   status('✓ Sitio marcado');
 }
 
 // Leaflet no pasa al mapa el toque que cae sobre un marcador. Sin esto, marcar
 // encima de una parada o de un paso de la ruta no haría nada.
 function pickable(marker) {
-  marker.on('click', e => { if (mapPickDay != null) mapPicked(e); });
+  marker.on('click', e => { if (picking) mapPicked(e); });
   return marker;
 }
 
@@ -1692,6 +1746,365 @@ async function deleteDayMoment(i, id) {
   status('Momento borrado');
 }
 
+/* ─── CREAR UN VIAJE DE VACACIONES ───
+   Sin itinerario que preparar, no hay nada que escribir a mano: la app crea
+   la carpeta y su bitacora.json, y el viaje se llena de tarjetas sobre la marcha. */
+const slug = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+
+function newAlbumTrip() {
+  applyTheme('playa');
+  el('app').innerHTML = `<div class="library">
+    <div class="lib-title">Viaje de vacaciones</div>
+    <div class="lib-sub">Sin itinerario: se va llenando de tarjetas, una por día o por plan</div>
+    <div class="panel">
+      <label class="fld">Nombre del viaje
+        <input type="text" id="nt-title" placeholder="Verano en Cádiz"></label>
+      <div class="row">
+        <label class="fld" style="flex:1">Desde
+          <input type="date" id="nt-desde" value="${hoyISO()}"></label>
+        <label class="fld" style="flex:1">Hasta
+          <input type="date" id="nt-hasta" value="${hoyISO()}"></label>
+      </div>
+      <label class="fld">Tipo
+        <select id="nt-tema">
+          <option value="playa">🏖️ Playa</option>
+          <option value="ciudad">🏙️ Ciudad</option>
+          <option value="montana">⛰️ Montaña</option>
+          <option value="carretera">🚐 Carretera</option>
+          <option value="crucero">⚓ Crucero</option>
+          <option value="velero">⛵ Velero</option>
+        </select></label>
+      <label class="fld">Quién va
+        <input type="text" id="nt-crew" placeholder="Separados por comas (opcional)"></label>
+      <div class="row end">
+        <button class="tb-btn" onclick="showLibrary()">Cancelar</button>
+        <button class="tb-btn primary" onclick="createAlbumTrip()">Crear viaje</button>
+      </div>
+    </div></div>`;
+}
+
+async function createAlbumTrip() {
+  const titulo = (el('nt-title').value || '').trim();
+  const desde = el('nt-desde').value, hasta = el('nt-hasta').value;
+  if (!titulo) { status('Ponle un nombre al viaje', true); return; }
+  if (desde && hasta && hasta < desde) { status('La fecha de fin es anterior a la de inicio', true); return; }
+  if (!await ensurePermission(rootHandle)) { status('Sin permiso para crear la carpeta', true); return; }
+
+  const año = (desde || hoyISO()).slice(0, 4);
+  const carpeta = `${slug(titulo) || 'viaje'}-${año}`;
+  try {
+    const dir = await rootHandle.getDirectoryHandle(carpeta, { create: true });
+    try {
+      await dir.getFileHandle('bitacora.json');
+      status(`Ya existe una carpeta ${carpeta} con un viaje dentro`, true);
+      return;
+    } catch (_) { /* no había bitácora: es carpeta nueva */ }
+
+    const crew = (el('nt-crew').value || '').split(',').map(s => s.trim()).filter(Boolean);
+    const data = {
+      schemaVersion: 2,
+      trip: {
+        id: carpeta, title: titulo, kind: 'album',
+        subtitle: desde ? `${fmtCorta(desde)}${hasta && hasta !== desde ? ' – ' + fmtCorta(hasta) : ''}` : '',
+        startDate: desde || undefined, endDate: hasta || desde || undefined,
+        theme: el('nt-tema').value, crew
+      },
+      entries: []
+    };
+    await writeFile('bitacora.json', new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), dir);
+
+    await scanTrips();
+    const i = tripHandles.findIndex(t => t.folder === carpeta);
+    if (i < 0) { await showLibrary(); status('Viaje creado. Pulsa actualizar si no aparece.', true); return; }
+    await openTrip(i);
+    status('✓ Viaje creado — añade tu primera tarjeta');
+  } catch (e) {
+    status('No se pudo crear el viaje: ' + e.message, true);
+  }
+}
+
+const fmtCorta = iso => {
+  const d = new Date(iso + 'T12:00:00');
+  return isNaN(d) ? iso : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+/* ─── VIAJE DE VACACIONES (álbum de tarjetas) ───
+   Unas vacaciones no llevan itinerario preparado: se van llenando de tarjetas,
+   una por lo que se hizo ese día, con título, fecha, fotos y reseña. */
+let albumDraft = null;
+
+const esAlbum = data => (data.trip || {}).kind === 'album'
+  || (!Array.isArray(data.days) || !data.days.length) && Array.isArray(data.entries);
+
+const fmtDay = iso => {
+  if (!iso) return 'Sin fecha';
+  const d = new Date(iso + 'T12:00:00');
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+const entradas = () => (D.entries || []).slice().sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
+
+function renderAlbum() {
+  const tr = D.trip || {}, th = applyTheme(tr.theme);
+  el('btn-pdf').style.display = el('btn-zip').style.display = el('btn-library').style.display = '';
+  el('score-bar').style.display = '';
+  document.title = 'Bitácora · ' + (tr.title || '');
+
+  const crew = (tr.crew || []).join(' · ');
+  const lista = entradas();
+  const conSitio = lista.filter(e => e.lat != null).length;
+  const fotos = lista.reduce((n, e) => n + (e.photos || []).length, 0);
+
+  let h = `<header>
+    ${HERO_ART[th.art] || HERO_ART.ship}
+    <div class="header-title">${th.icon} ${esc(tr.title || '')} ${th.icon}</div>
+    <div class="header-sub">${esc(tr.subtitle || '')}</div>
+    ${crew ? `<div class="header-crew">${esc(W('crewLabel', 'Viajeros'))}: ${esc(crew)}</div>` : ''}
+    <svg class="header-wave" viewBox="0 0 1200 50" preserveAspectRatio="none"><path d="M0 20 Q150 0 300 20 Q450 40 600 20 Q750 0 900 20 Q1050 40 1200 20 L1200 50 L0 50Z" fill="var(--paper)"/></svg>
+  </header><main>`;
+
+  if (conSitio) h += `<div class="panel"><div class="panel-label">🧭 Dónde estuvimos</div><div id="leaflet-map"></div>
+    <div class="map-hint">Un marcador por cada tarjeta con sitio marcado.</div></div>`;
+
+  h += `<div class="section-heading">📸 ${esc(W('diaryTitle', 'El álbum del viaje'))}</div>
+    <div class="alb-sum">${lista.length} tarjeta${lista.length === 1 ? '' : 's'} · ${fotos} foto${fotos === 1 ? '' : 's'}</div>
+    <div id="alb-lista"></div>
+    </main>`;
+
+  el('app').innerHTML = h;
+  renderAlbumList();
+  if (conSitio) initAlbumMap();
+  if (window.scrollTo && !albumDraft) window.scrollTo(0, 0);
+}
+
+function renderAlbumList() {
+  const box = el('alb-lista');
+  if (!box) return;
+  const lista = entradas();
+  const tarjetas = lista.map(e => {
+    if (albumDraft && albumDraft.id === e.id) return albumForm();
+    const fotos = (e.photos || []).filter(f => urls[momKey(f)]).map(f =>
+      `<div class="photo-thumb"><img src="${urls[momKey(f)]}" alt="" loading="lazy" onclick="openLightbox('${esc(momKey(f))}')"></div>`).join('');
+    return `<div class="alb-card" id="ac-${esc(e.id)}">
+      <div class="alb-head">
+        <div class="alb-title">${esc(e.title || 'Sin título')}</div>
+        <div class="alb-date">${esc(fmtDay(e.date))}</div>
+      </div>
+      ${e.text ? `<div class="alb-text">${esc(e.text)}</div>` : ''}
+      ${e.lat != null ? `<div class="dm-coord">🗺️ ${e.lat.toFixed(4)}, ${e.lng.toFixed(4)}</div>` : ''}
+      ${fotos ? `<div class="photo-grid">${fotos}</div>` : ''}
+      <div class="dm-acts">
+        <button onclick="editEntry('${esc(e.id)}')">✎ Editar</button>
+        <button onclick="deleteEntry('${esc(e.id)}')">🗑 Borrar</button>
+      </div></div>`;
+  }).join('');
+
+  const nueva = albumDraft && !lista.some(e => e.id === albumDraft.id) ? albumForm() : '';
+  const vacío = !lista.length && !albumDraft
+    ? `<div class="alb-vacio"><h2>Todavía no hay nada</h2>
+        <p>Cada día que hagáis algo, añade una tarjeta: el parque de atracciones, la playa, la comida en casa de los abuelos.</p></div>` : '';
+
+  box.innerHTML = vacío + tarjetas + nueva +
+    (albumDraft ? '' : `<button class="dm-add" onclick="newEntry()">＋ Nueva tarjeta</button>`);
+  if (albumDraft) renderEntryDraftPhotos();
+}
+
+function albumForm() {
+  const e = albumDraft;
+  return `<div class="alb-card dm-form">
+    <label class="fld">Título
+      <input type="text" id="alb-title" value="${esc(e.title || '')}" placeholder="El parque de atracciones"></label>
+    <label class="fld">Fecha
+      <input type="date" id="alb-date" value="${esc(e.date || '')}"></label>
+    <label class="fld">¿Qué tal fue?
+      <textarea id="alb-text" placeholder="La reseña del día…">${esc(e.text || '')}</textarea></label>
+    <div class="fld">Dónde
+      <div class="dm-loc">${e.lat != null
+        ? `🗺️ ${e.lat.toFixed(5)}, ${e.lng.toFixed(5)} <button class="tb-btn" onclick="clearEntryLoc()">Quitar</button>`
+        : '<span class="muted">Sin marcar en el mapa</span>'}</div>
+      <div class="row">
+        <button class="tb-btn" onclick="locateEntry()">📍 Estoy aquí</button>
+        <button class="tb-btn" onclick="pickEntryOnMap()">🗺️ Marcar en el mapa</button>
+      </div></div>
+    <div class="fld">Fotos
+      <div class="photo-grid" id="alb-fotos"></div></div>
+    <div class="row end">
+      <button class="tb-btn" onclick="cancelEntry()">Cancelar</button>
+      <button class="tb-btn primary" onclick="saveEntry()">Guardar tarjeta</button>
+    </div></div>`;
+}
+
+function syncEntryDraft() {
+  if (!albumDraft) return;
+  const t = el('alb-title'), f = el('alb-date'), x = el('alb-text');
+  if (t) albumDraft.title = t.value;
+  if (f) albumDraft.date = f.value;
+  if (x) albumDraft.text = x.value;
+}
+
+function newEntry() {
+  albumDraft = { id: 'e' + Date.now(), date: hoyISO(), title: '', text: '', photos: [] };
+  renderAlbumList();
+}
+
+function editEntry(id) {
+  const e = (D.entries || []).find(x => x.id === id);
+  if (!e) return;
+  albumDraft = JSON.parse(JSON.stringify(e));
+  if (!Array.isArray(albumDraft.photos)) albumDraft.photos = [];
+  renderAlbumList();
+}
+
+async function cancelEntry() {
+  const e = albumDraft;
+  if (!e) return;
+  const guardadas = ((D.entries || []).find(x => x.id === e.id) || {}).photos || [];
+  for (const f of e.photos.filter(f => !guardadas.includes(f))) await dropMomentPhoto(f);
+  albumDraft = null; cancelPick();
+  renderAlbumList();
+}
+
+function clearEntryLoc() {
+  syncEntryDraft();
+  delete albumDraft.lat; delete albumDraft.lng;
+  renderAlbumList();
+}
+
+function locateEntry() {
+  syncEntryDraft();
+  locate(albumDraft, renderAlbumList);
+}
+
+// Si todavía no hay ningún sitio marcado no hay mapa donde tocar: se pinta uno primero
+function pickEntryOnMap() {
+  syncEntryDraft();
+  if (!el('leaflet-map')) renderAlbumConMapa();
+  startPick(albumDraft, () => {
+    renderAlbumList();
+    const c = el('alb-lista');
+    if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+// Fuerza el panel del mapa aunque ninguna tarjeta tenga sitio todavía
+function renderAlbumConMapa() {
+  const panel = `<div class="panel"><div class="panel-label">🧭 Dónde estuvimos</div><div id="leaflet-map"></div>
+    <div class="map-hint">Toca el sitio de esta tarjeta.</div></div>`;
+  const main = document.querySelector('main');
+  if (!main) return;
+  main.insertAdjacentHTML('afterbegin', panel);
+  initAlbumMap();
+}
+
+function addEntryPhotos() {
+  const input = el('photo-input');
+  input.value = '';
+  input.onchange = async () => {
+    if (!input.files.length || !albumDraft) return;
+    syncEntryDraft();
+    if (!await ensurePermission(tripDir)) { status('Sin permiso de escritura en la carpeta', true); return; }
+    status('Guardando fotos…');
+    for (const file of input.files) {
+      try {
+        const blob = await compressImage(file, 1400, 1400, 0.78);
+        const name = `tarjeta_${albumDraft.id}_${albumDraft.photos.length}.jpg`;
+        await writeFile(name, blob);
+        const max = thumbSize(false);
+        const thumb = await compressImage(blob, max, max, thumbQuality());
+        urls[momKey(name)] = URL.createObjectURL(thumb);
+        await cacheSet(name, thumb);
+        albumDraft.photos.push(name);
+      } catch (e) { status('Una foto no se pudo guardar: ' + e.message, true); }
+    }
+    renderEntryDraftPhotos();
+    status('✓ Fotos añadidas');
+  };
+  input.click();
+}
+
+function renderEntryDraftPhotos() {
+  const grid = el('alb-fotos');
+  if (!grid || !albumDraft) return;
+  grid.innerHTML = albumDraft.photos.map(f =>
+    `<div class="photo-thumb">${urls[momKey(f)] ? `<img src="${urls[momKey(f)]}" alt="">` : '<div class="ph"></div>'}
+      <button class="del-btn" onclick="removeEntryDraftPhoto('${esc(f)}')">✕</button></div>`).join('')
+    + `<button class="add-photo" onclick="addEntryPhotos()"><span style="font-size:1.4rem">＋</span>Añadir</button>`;
+}
+
+async function removeEntryDraftPhoto(file) {
+  syncEntryDraft();
+  albumDraft.photos = albumDraft.photos.filter(f => f !== file);
+  await dropMomentPhoto(file);
+  renderEntryDraftPhotos();
+}
+
+async function saveEntry() {
+  syncEntryDraft();
+  const e = albumDraft;
+  if (!e.title && !e.text && !e.photos.length) { status('Ponle al menos un título o una foto', true); return; }
+  const guardada = { id: e.id, date: e.date || '', title: e.title || '', text: e.text || '', photos: e.photos };
+  if (e.lat != null) { guardada.lat = e.lat; guardada.lng = e.lng; }
+
+  if (!Array.isArray(D.entries)) D.entries = [];
+  const k = D.entries.findIndex(x => x.id === e.id);
+  if (k >= 0) D.entries[k] = guardada; else D.entries.push(guardada);
+
+  albumDraft = null; cancelPick();
+  await save();
+  renderAlbum();
+  status('✓ Tarjeta guardada');
+}
+
+async function deleteEntry(id) {
+  const e = (D.entries || []).find(x => x.id === id);
+  if (!e) return;
+  if (!confirm('¿Borrar esta tarjeta? También se borran sus fotos de la carpeta.')) return;
+  for (const f of (e.photos || [])) await dropMomentPhoto(f);
+  D.entries = D.entries.filter(x => x.id !== id);
+  await save();
+  renderAlbum();
+  status('Tarjeta borrada');
+}
+
+function initAlbumMap() {
+  if (!conMapa(initAlbumMap)) return;
+  if (mapObj) { try { mapObj.remove(); } catch (_) {} mapObj = null; }
+  const puntos = (D.entries || []).filter(e => e.lat != null);
+  const centro = puntos.length ? [puntos[0].lat, puntos[0].lng] : [40.4, -3.7];
+  mapObj = L.map('leaflet-map', { center: centro, zoom: puntos.length ? 11 : 5 });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(mapObj);
+  momentLayer = L.layerGroup().addTo(mapObj);
+  refreshAlbumMarkers();
+  mapObj.on('click', mapPicked);
+  if (puntos.length > 1) mapObj.fitBounds(puntos.map(e => [e.lat, e.lng]), { padding: [30, 30], maxZoom: 14 });
+  setTimeout(() => mapObj.invalidateSize(), 300);
+}
+
+function refreshAlbumMarkers() {
+  if (!mapObj || !momentLayer || typeof L === 'undefined') return;
+  momentLayer.clearLayers();
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--alt').trim() || '#1a6b9a';
+  (D.entries || []).filter(e => e.lat != null).forEach(e => {
+    const foto = (e.photos || []).find(f => urls[momKey(f)]);
+    pickable(L.marker([e.lat, e.lng], { icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13],
+      html: `<div style="background:${color};width:26px;height:26px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:13px">📸</div>` }) })
+      .bindPopup(`<div style="font-family:Lato,sans-serif;min-width:150px">
+        ${foto ? `<img src="${urls[momKey(foto)]}" style="width:100%;height:84px;object-fit:cover;border-radius:6px;margin-bottom:5px">` : ''}
+        <div style="font-weight:900">${esc(e.title || '')}</div>
+        <div style="font-size:.74rem;color:#777">${esc(fmtDay(e.date))}</div>
+        <button onclick="goToEntry('${esc(e.id)}')" style="margin-top:6px;font-size:.75rem">Ver la tarjeta</button>
+      </div>`, { maxWidth: 230 }))
+      .addTo(momentLayer);
+  });
+}
+
+function goToEntry(id) {
+  const card = el('ac-' + id);
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 async function openLightbox(key) {
   const img = el('lightbox-img');
   img.src = urls[key] || '';
@@ -1719,16 +2132,22 @@ async function save() {
 
 /* ─── MAPA ─── */
 let mapObj = null, mapTries = 0, momentLayer = null;
-function initMap() {
+// Leaflet se carga aparte y puede tardar: espera a tenerlo antes de pintar cualquier mapa
+function conMapa(reintento) {
   const box = el('leaflet-map');
-  if (!box) return;
+  if (!box) return false;
   if (typeof L === 'undefined') {
-    if (++mapTries < 24) { setTimeout(initMap, 250); return; }
+    if (++mapTries < 24) { setTimeout(reintento, 250); return false; }
     box.outerHTML = `<div class="map-hint" style="padding:1rem">El mapa interactivo necesita conexión la primera vez.
       Ábrela una vez con internet y quedará guardada para usarla sin conexión.</div>`;
-    return;
+    return false;
   }
   mapTries = 0;
+  return true;
+}
+
+function initMap() {
+  if (!conMapa(initMap)) return;
   if (mapObj) { try { mapObj.remove(); } catch (_) {} mapObj = null; }
   const cfg = D.map || {}, days = D.days || [];
   const stops = days.map((d, i) => ({ d, i })).filter(x => x.d.map);
@@ -1817,6 +2236,7 @@ async function exportZip() {
     Object.entries(D.statueFiles).forEach(([k, v]) => all['s-' + k] = v);
     Object.values(D.moments || {}).forEach(lista =>
       lista.forEach(m => (m.photos || []).forEach(f => all['mom-' + f] = f)));
+    (D.entries || []).forEach(e => (e.photos || []).forEach(f => all['mom-' + f] = f));
     for (const name of new Set(Object.values(all))) {
       try { const fh = await tripDir.getFileHandle(name); zip.file(name, await (await fh.getFile()).arrayBuffer()); } catch (_) {}
     }
@@ -1854,12 +2274,27 @@ async function generatePDF() {
   });
   const visited = (D.visited || []).filter(Boolean).length;
 
+  const album = esAlbum(D);
+  const tarjetas = album ? entradas() : [];
+  const totalFotos = tarjetas.reduce((n, e) => n + (e.photos || []).length, 0);
+
   let body = `<section class="cover"><div class="cover-icon">${th.icon}</div>
     <h1>${esc(tr.title || '')}</h1><p class="sub">${esc(tr.subtitle || '')}</p>
     <p class="crew">${esc((tr.crew || []).join(' · '))}</p><hr>
-    <p class="stat">${th.icon} ${visited} de ${(D.days || []).length} ${esc(W('stopPlural', 'paradas'))}</p>
-    <p class="stat">🗿 ${totalC} ${esc(W('huntUnit', 'capturas'))} · ${totalP} puntos</p>
+    ${album
+      ? `<p class="stat">📸 ${tarjetas.length} tarjeta${tarjetas.length === 1 ? '' : 's'} · ${totalFotos} foto${totalFotos === 1 ? '' : 's'}</p>`
+      : `<p class="stat">${th.icon} ${visited} de ${(D.days || []).length} ${esc(W('stopPlural', 'paradas'))}</p>
+         <p class="stat">🗿 ${totalC} ${esc(W('huntUnit', 'capturas'))} · ${totalP} puntos</p>`}
     <p class="gen">Bitácora generada el ${new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p></section>`;
+
+  tarjetas.forEach(e => {
+    const fotos = (e.photos || []).filter(f => imgs[momKey(f)]);
+    body += `<section class="day"><div class="eyebrow">${esc(fmtDay(e.date))}</div>
+      <h2>${esc(e.title || 'Sin título')}</h2>
+      ${e.text ? `<p class="journal">${esc(e.text).replace(/\n/g, '<br>')}</p>` : ''}
+      ${fotos.length ? `<div class="gal">${fotos.map(f => `<img src="${imgs[momKey(f)]}">`).join('')}</div>` : ''}
+    </section>`;
+  });
 
   (D.days || []).forEach((d, i) => {
     const hist = d.history || {}, items = d.hunt?.items || [];

@@ -199,6 +199,51 @@ Detalles que se escapan:
 
 ---
 
+## 3.bis Viajes de vacaciones, sin itinerario
+
+Hay un segundo tipo de viaje: unas vacaciones sin recorrido preparado, que se van llenando sobre la marcha con
+tarjetas —una por día o por plan— con título, fecha, fotos y reseña.
+
+**No los generes tú.** Los crea la app sola (botón *Nuevo viaje de vacaciones*), que escribe la carpeta y este
+`bitacora.json`, y luego los llena la familia. Se describen aquí para que se entienda un archivo que te
+encuentres, no para producirlos.
+
+```jsonc
+{
+  "schemaVersion": 2,
+  "trip": {
+    "id": "verano-en-cadiz-2026",
+    "title": "Verano en Cádiz",
+    "kind": "album",                  // esto es lo que lo distingue de un viaje con itinerario
+    "subtitle": "1 de julio de 2026 – 15 de julio de 2026",
+    "startDate": "2026-07-01",
+    "endDate": "2026-07-15",
+    "theme": "playa",
+    "crew": ["Ana", "Lucas"]
+  },
+  "entries": [
+    {
+      "id": "e1751210400000",
+      "date": "2026-07-03",
+      "title": "El parque de atracciones",
+      "text": "Lucas se subió dos veces a la montaña rusa.",
+      "lat": 36.51,                   // opcional, si se marcó el sitio
+      "lng": -6.28,
+      "photos": ["tarjeta_e1751210400000_0.jpg"]
+    }
+  ]
+}
+```
+
+No lleva `days`, ni `hunt`, ni `route`, ni los campos de estado del itinerario. Las tarjetas salen ordenadas
+por fecha, y las que tienen sitio marcado aparecen en un mapa propio.
+
+Si un viaje de estos acaba mereciendo un itinerario preparado, se le añaden `days` y se le quita `kind`: la app
+pasa a enseñarlo como viaje con ruta. Ojo, entonces las tarjetas dejan de verse — siguen guardadas en `entries`,
+intactas, pero la vista de itinerario no las muestra.
+
+---
+
 ## 4. Estado del viaje: pendiente, en curso, hecho
 
 La biblioteca agrupa los viajes en tres secciones: **En curso** arriba, **Pendientes** en medio (lo más próximo

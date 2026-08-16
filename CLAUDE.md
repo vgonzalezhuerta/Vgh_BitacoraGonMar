@@ -34,8 +34,12 @@ Carpeta raíz elegida por el usuario
     └─ momento_*.jpg
 ```
 
-Un viaje es cualquier subcarpeta con `bitacora.json`. El esquema completo está en `GUIA-bitacoras.md`;
-si se cambia el formato, actualizar esa guía en el mismo commit.
+Un viaje es cualquier subcarpeta con `bitacora.json`. El esquema completo está en `FORMATO-viajes.md`;
+si se cambia el formato, actualizar ese documento en el mismo commit.
+
+Hay dos clases de viaje: con **itinerario** preparado (`days`, historia, rutas, caza de tesoros) y de
+**vacaciones** (`trip.kind: "album"`, sin `days`, con tarjetas en `entries`). Los primeros los prepara un
+proyecto de Claude; los segundos los crea la propia app.
 
 Campos de estado dentro de `bitacora.json`, escritos por la app: `visited` (array), `journals`,
 `caught`, `photoFiles`, `statueFiles` (objetos indexados por `"díaÍndice"` o `"día-objetivo"`) y `moments`
@@ -59,6 +63,9 @@ Bloques principales, en orden dentro del `<script>`:
 - **Render del viaje** — `renderTrip()`, `dayCard()`, `scoreboard()`.
 - **Momentos del día** — `renderDayMoments()`, `saveDayMoment()`: lo que pasó fuera del plan, con ubicación
   opcional del GPS o marcada en el mapa. Nunca escribe en `route`: el itinerario preparado es de solo lectura.
+- **Viajes de vacaciones** — `esAlbum()`, `renderAlbum()`, `saveEntry()`, `createAlbumTrip()`: viajes sin
+  itinerario (`trip.kind: "album"`), hechos de tarjetas en `entries`. La app crea su carpeta y su JSON.
+  `repinta()` decide entre `renderTrip()` y `renderAlbum()`; todo lo demás (fotos, caché, ZIP, PDF) es común.
 - **Carga de imágenes** — `loadMedia()` y `readPending()`. Lee de dos en dos con 3 reintentos: Drive en
   Android sirve los archivos de uno en uno y con más concurrencia caducan.
 - **Guardado** — `save()` (con debounce), `writeFile(name, blob, dir)`.

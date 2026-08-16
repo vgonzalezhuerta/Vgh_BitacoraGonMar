@@ -40,6 +40,21 @@ Normalmente no hay que hacer nada: el estado sale de las fechas del viaje compar
 La tarjeta de un viaje pendiente no enseña progreso — sería siempre cero. En su lugar muestra cuántos días y
 cuántos objetivos trae preparados, y cuánto falta para empezarlo si tiene fecha.
 
+## Viajes de vacaciones (sin itinerario)
+
+No todos los viajes tienen recorrido. Para unas vacaciones —una semana en la playa, unos días en casa de los
+abuelos— hay un segundo tipo que no se prepara: se crea vacío y se va llenando.
+
+En la biblioteca, **🏖️ Nuevo viaje de vacaciones** pide nombre, fechas, tipo y quién va. La app crea la
+subcarpeta y su `bitacora.json`; no hay que escribir JSON ni pasar por Claude.
+
+Dentro, cada plan es una **tarjeta**: título, fecha, reseña, fotos y, si quieres, el sitio marcado en el mapa.
+Un día en el parque de atracciones es una tarjeta con sus diez fotos y su reseña. Las tarjetas se ordenan solas
+por fecha, y si alguna tiene sitio, arriba aparece un mapa con todas.
+
+Salen en la biblioteca junto a los demás viajes, con la insignia *vacaciones*, agrupadas igual por En curso,
+Pendientes y Hechos según sus fechas. La copia ZIP y el PDF los incluyen como a cualquier otro viaje.
+
 ## Crear un viaje nuevo
 
 1. Genera el `bitacora.json` siguiendo [FORMATO-viajes.md](FORMATO-viajes.md). Ese documento incluye un §8 con
