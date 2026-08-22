@@ -338,6 +338,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 .beer-body{flex:1;min-width:0}
 .beer-name{font-family:var(--display);font-size:1.2rem;color:var(--panel);line-height:1.15}
 .beer-meta{font-size:.78rem;color:#7a6a52;margin-top:.15rem;display:flex;flex-wrap:wrap;gap:.15rem .6rem}
+.beer-pin{cursor:pointer;text-decoration:underline dotted}
 .beer-stars{color:var(--accent);font-size:.95rem;letter-spacing:.08em;margin-top:.25rem}
 .beer-stars .dim{color:#c9b98f}
 .beer-stars .guess{color:#7a6a52;font-size:.7rem;font-style:italic;letter-spacing:0;margin-left:.35rem}
@@ -969,6 +970,9 @@ let B = null;            // { schemaVersion, beers: [] }
 let beerDraft = null;    // cerveza en edición
 let beerUrls = {};       // archivo -> objectURL de su miniatura
 let beerQuery = '';      // texto del buscador
+let beerVisibles = [];   // las que se ven ahora: el mapa sigue al buscador
+let beerFormMarker = null;
+let beerMapOn = false;   // hay un mapa de cervezas vivo, y no el de otra pantalla
 
 const sinTildes = s => (s == null ? '' : String(s)).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
@@ -1007,10 +1011,13 @@ function estrellas(b) {
 
 function beerCard(b) {
   const fotos = b.photos || [];
-  const lugar = [b.place, b.country].filter(Boolean).join(', ');
-  const meta = [b.style, lugar, fmtFecha(b.datetime), fotos.length > 1 ? fotos.length + ' fotos' : '']
+  const lugar = [b.place, b.city, b.country].filter(Boolean).join(', ');
+  const sitio = b.lat != null
+    ? `<span class="beer-pin" onclick="goToBeerMap('${esc(b.id)}')" title="Verla en el mapa">📍 ${esc(lugar || 'marcada en el mapa')}</span>`
+    : (lugar ? `<span>${esc(lugar)}</span>` : '');
+  const meta = sitio + [b.style, fmtFecha(b.datetime), fotos.length > 1 ? fotos.length + ' fotos' : '']
     .filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('');
-  return `<div class="beer-card">
+  return `<div class="beer-card" id="card-${esc(b.id)}">
     <div class="beer-photo" id="bt-${esc(b.id)}">${fotos.length ? '' : '🍺'}</div>
     <div class="beer-body">
       <div class="beer-name">${esc(b.name)}</div>
@@ -1051,6 +1058,9 @@ async function showBeers() {
     return;
   }
 
+  const conSitio = B.beers.some(b => b.lat != null);
+  beerMapOn = false;
+  if (mapObj) { try { mapObj.remove(); } catch (_) {} mapObj = null; }
   el('app').innerHTML = `<div class="library">
     <div class="lib-title">Bitácoras</div>
     ${tabs('cervezas')}
@@ -1060,9 +1070,13 @@ async function showBeers() {
         oninput="filterBeers(this.value)">
       <button class="tb-btn primary" onclick="newBeer()">🍺 Nueva</button>
       <button class="tb-btn" onclick="importKeep()" title="Importar notas de Google Keep">📥</button>
+      <button class="tb-btn" onclick="pickUbicaciones()" title="Aplicar un archivo de ubicaciones">📍</button>
     </div>
+    ${conSitio ? `<div class="panel"><div class="panel-label">🧭 Dónde las he tomado</div><div id="leaflet-map"></div>
+      <div class="map-hint">Toca un marcador para ir a su ficha.</div></div>` : ''}
     <div class="beer-list" id="beer-list"></div></div>`;
   await renderBeerList();
+  if (conSitio) initBeerMap();
 }
 
 function filterBeers(v) { beerQuery = v; renderBeerList(); }
@@ -1072,7 +1086,7 @@ async function renderBeerList() {
   if (!caja) return;
   const q = sinTildes(beerQuery).trim();
   const todas = B.beers.slice().sort((a, b) => (b.datetime || '').localeCompare(a.datetime || ''));
-  const lista = q ? todas.filter(b => sinTildes([b.name, b.brewery, b.style, b.place, b.country, b.notes].join(' ')).includes(q)) : todas;
+  const lista = q ? todas.filter(b => sinTildes([b.name, b.brewery, b.style, b.place, b.city, b.country, b.notes].join(' ')).includes(q)) : todas;
 
   const paises = new Set(B.beers.map(b => (b.country || '').trim()).filter(Boolean));
   const punt = B.beers.filter(b => Number(b.rating) > 0);
@@ -1086,6 +1100,8 @@ async function renderBeerList() {
 
   caja.innerHTML = lista.length ? lista.map(beerCard).join('')
     : '<div class="lib-empty"><h2>Nada con esa búsqueda</h2><p>Prueba con otra palabra.</p></div>';
+  beerVisibles = lista;
+  refreshBeerMarkers();
 
   for (const b of lista) {
     const foto = (b.photos || [])[0];
@@ -1119,7 +1135,7 @@ async function openBeerPhoto(file) {
 
 /* ─── FORMULARIO ─── */
 function newBeer() {
-  beerDraft = { id: 'b' + Date.now(), name: '', brewery: '', style: '', place: '', country: '',
+  beerDraft = { id: 'b' + Date.now(), name: '', brewery: '', style: '', place: '', city: '', country: '',
     datetime: nowLocalISO(), rating: 0, notes: '', photos: [] };
   renderBeerForm();
 }
@@ -1154,21 +1170,36 @@ function renderBeerForm() {
 
       <div class="row">
         <label class="fld" style="flex:1;margin:0">Sitio
-          <input type="text" id="beer-place" placeholder="Bar, ciudad…" value="${esc(d.place || '')}"
+          <input type="text" id="beer-place" placeholder="El bar, la casa rural…" value="${esc(d.place || '')}"
             list="dl-places"><datalist id="dl-places">${sugerencias(B.beers.map(b => b.place))}</datalist></label>
-        <label class="fld" style="flex:1;margin:0">País
-          <input type="text" id="beer-country" placeholder="España, Bélgica…" value="${esc(d.country || '')}"
-            list="dl-countries"><datalist id="dl-countries">${sugerencias(B.beers.map(b => b.country))}</datalist></label>
+        <label class="fld" style="flex:1;margin:0">Ciudad
+          <input type="text" id="beer-city" placeholder="Albarracín, Brujas…" value="${esc(d.city || '')}"
+            list="dl-cities"><datalist id="dl-cities">${sugerencias(B.beers.map(b => b.city))}</datalist></label>
       </div>
 
-      <label class="fld" style="margin-top:.9rem">Cuándo
+      <label class="fld" style="margin-top:.9rem">País
+        <input type="text" id="beer-country" placeholder="España, Bélgica…" value="${esc(d.country || '')}"
+          list="dl-countries"><datalist id="dl-countries">${sugerencias(B.beers.map(b => b.country))}</datalist></label>
+
+      <label class="fld">Cuándo
         <input type="datetime-local" id="beer-dt" value="${esc(d.datetime || '')}"></label>
+
+      <div class="fld">Dónde la tomé
+        <div id="leaflet-map"></div>
+        <div class="map-hint">Toca el mapa para marcar el sitio, y arrastra el marcador para afinarlo.</div>
+        <div class="row">
+          <button class="tb-btn" onclick="locateBeer()">📍 Estoy aquí</button>
+          <button class="tb-btn" id="beer-clear-loc" onclick="clearBeerLoc()"
+            style="${d.lat != null ? '' : 'display:none'}">✕ Quitar el punto</button>
+          <span class="muted" id="beer-coords">${d.lat != null
+            ? esc(Number(d.lat).toFixed(5) + ', ' + Number(d.lng).toFixed(5)) : 'Sin punto en el mapa'}</span>
+        </div></div>
 
       <div class="fld">Puntuación
         <div class="star-pick">
           ${[1, 2, 3, 4, 5].map(n => `<button class="${n <= v ? 'on' : ''}" onclick="setBeerRating(${n})"
             title="${n} de 5">★</button>`).join('')}
-          <span class="muted">${v ? 'Toca la misma estrella para quitarla' : 'Sin puntuar'}</span>
+          <span class="muted" id="star-hint">${v ? 'Toca la misma estrella para quitarla' : 'Sin puntuar'}</span>
         </div></div>
 
       <label class="fld">Notas
@@ -1183,12 +1214,13 @@ function renderBeerForm() {
       </div>
     </div></div>`;
   renderBeerDraftPhotos();
+  initBeerFormMap();
 }
 
 function syncBeerDraft() {
   if (!beerDraft) return;
   const campos = { name: 'beer-name', brewery: 'beer-brewery', style: 'beer-style',
-    place: 'beer-place', country: 'beer-country', notes: 'beer-notes' };
+    place: 'beer-place', city: 'beer-city', country: 'beer-country', notes: 'beer-notes' };
   Object.entries(campos).forEach(([k, id]) => { const n = el(id); if (n) beerDraft[k] = n.value.trim(); });
   const dt = el('beer-dt');
   if (dt && dt.value) beerDraft.datetime = dt.value;
@@ -1198,7 +1230,10 @@ function setBeerRating(n) {
   syncBeerDraft();
   beerDraft.rating = (Number(beerDraft.rating) === n) ? 0 : n;
   delete beerDraft.ratingGuessed;
-  renderBeerForm();
+  const v = Number(beerDraft.rating) || 0;
+  document.querySelectorAll('.star-pick button').forEach((b, i) => b.classList.toggle('on', i < v));
+  const pista = el('star-hint');
+  if (pista) pista.textContent = v ? 'Toca la misma estrella para quitarla' : 'Sin puntuar';
 }
 
 function renderBeerDraftPhotos() {
@@ -1272,6 +1307,157 @@ async function deleteBeer(id) {
   status('Cerveza borrada');
 }
 
+/* ─── MAPA ─── */
+function initBeerMap() {
+  if (!conMapa(initBeerMap)) return;
+  if (mapObj) { try { mapObj.remove(); } catch (_) {} mapObj = null; }
+  const puntos = B.beers.filter(b => b.lat != null);
+  const centro = puntos.length ? [puntos[0].lat, puntos[0].lng] : [40.4, -3.7];
+  mapObj = L.map('leaflet-map', { center: centro, zoom: puntos.length ? 11 : 5, zoomAnimation: false });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(mapObj);
+  momentLayer = L.layerGroup().addTo(mapObj);
+  beerMapOn = true;
+  refreshBeerMarkers();
+  if (puntos.length > 1) mapObj.fitBounds(puntos.map(b => [b.lat, b.lng]), { padding: [30, 30], maxZoom: 13, animate: false });
+  setTimeout(() => mapObj.invalidateSize(), 300);
+}
+
+function refreshBeerMarkers() {
+  if (!beerMapOn || !mapObj || !momentLayer || typeof L === 'undefined') return;
+  momentLayer.clearLayers();
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#d4a017';
+  (beerVisibles.length ? beerVisibles : B.beers).filter(b => b.lat != null).forEach(b => {
+    const foto = (b.photos || [])[0];
+    const donde = [b.place, b.city, b.country].filter(Boolean).join(', ');
+    L.marker([b.lat, b.lng], { icon: L.divIcon({ className: '', iconSize: [28, 28], iconAnchor: [14, 14],
+      html: `<div style="background:${color};width:28px;height:28px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:14px">🍺</div>` }) })
+      .bindPopup(`<div style="font-family:Lato,sans-serif;min-width:150px">
+        ${foto && beerUrls[foto] ? `<img src="${beerUrls[foto]}" style="width:100%;height:84px;object-fit:cover;border-radius:6px;margin-bottom:5px">` : ''}
+        <div style="font-weight:900">${esc(b.name)}</div>
+        ${donde ? `<div style="font-size:.74rem;color:#777">${esc(donde)}</div>` : ''}
+        <button onclick="goToBeer('${esc(b.id)}')" style="margin-top:6px;font-size:.75rem">Ver la ficha</button>
+      </div>`, { maxWidth: 230 })
+      .addTo(momentLayer);
+  });
+}
+
+function goToBeer(id) {
+  const card = el('card-' + id);
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function goToBeerMap(id) {
+  const b = B.beers.find(x => x.id === id);
+  const box = el('leaflet-map');
+  if (!b || b.lat == null || !mapObj || !box) return;
+  mapObj.setView([b.lat, b.lng], 15, { animate: false });
+  box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// El mapa del formulario es de una sola cerveza: cualquier toque mueve su punto
+function initBeerFormMap() {
+  if (!el('leaflet-map')) return;
+  if (!conMapa(initBeerFormMap)) return;
+  if (mapObj) { try { mapObj.remove(); } catch (_) {} mapObj = null; }
+  beerMapOn = false; beerFormMarker = null;
+  const d = beerDraft;
+  if (!d) return;
+  const otras = B.beers.filter(b => b.lat != null);
+  const centro = d.lat != null ? [d.lat, d.lng] : otras.length ? [otras[0].lat, otras[0].lng] : [40.4, -3.7];
+  mapObj = L.map('leaflet-map', { center: centro, zoom: d.lat != null ? 15 : otras.length ? 9 : 5, zoomAnimation: false });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(mapObj);
+  mapObj.on('click', e => ponPuntoCerveza(e.latlng.lat, e.latlng.lng));
+  if (d.lat != null) ponPuntoCerveza(d.lat, d.lng, true);
+  setTimeout(() => { if (mapObj) mapObj.invalidateSize(); }, 300);
+}
+
+function ponPuntoCerveza(lat, lng, callado) {
+  if (!beerDraft || !mapObj || typeof L === 'undefined') return;
+  beerDraft.lat = +Number(lat).toFixed(6);
+  beerDraft.lng = +Number(lng).toFixed(6);
+  if (beerFormMarker) beerFormMarker.setLatLng([beerDraft.lat, beerDraft.lng]);
+  else {
+    beerFormMarker = L.marker([beerDraft.lat, beerDraft.lng], { draggable: true }).addTo(mapObj);
+    beerFormMarker.on('dragend', () => {
+      const q = beerFormMarker.getLatLng();
+      ponPuntoCerveza(q.lat, q.lng, true);
+    });
+  }
+  pintaPuntoCerveza();
+  if (!callado) status('✓ Sitio marcado');
+}
+
+function pintaPuntoCerveza() {
+  const d = beerDraft;
+  const txt = el('beer-coords');
+  if (txt) txt.textContent = d && d.lat != null
+    ? Number(d.lat).toFixed(5) + ', ' + Number(d.lng).toFixed(5) : 'Sin punto en el mapa';
+  const quitar = el('beer-clear-loc');
+  if (quitar) quitar.style.display = (d && d.lat != null) ? '' : 'none';
+}
+
+function locateBeer() {
+  syncBeerDraft();
+  locate(beerDraft, () => {
+    if (beerDraft.lat != null) {
+      if (mapObj) mapObj.setView([beerDraft.lat, beerDraft.lng], 16, { animate: false });
+      ponPuntoCerveza(beerDraft.lat, beerDraft.lng, true);
+    }
+  });
+}
+
+function clearBeerLoc() {
+  syncBeerDraft();
+  delete beerDraft.lat; delete beerDraft.lng;
+  if (beerFormMarker && mapObj) { try { mapObj.removeLayer(beerFormMarker); } catch (_) {} }
+  beerFormMarker = null;
+  pintaPuntoCerveza();
+}
+
+/* ─── UBICACIONES PREPARADAS ─── */
+// Aquí no hay geocodificador —ni lo habría sin conexión—, así que el sitio de
+// cada cerveza se prepara fuera y llega en un archivo aparte que se casa con
+// las fichas por el nombre de la nota.
+function aplicaUbicaciones(datos, soloVacias) {
+  const lista = Array.isArray(datos) ? datos : ((datos && datos.ubicaciones) || []);
+  if (!Array.isArray(lista) || !lista.length) return { tocadas: 0, sinPareja: [] };
+  const porClave = new Map();
+  for (const u of lista) for (const k of [u.archivo, u.nota, u.name]) if (k) porClave.set(sinTildes(k), u);
+  const usadas = new Set();
+  let tocadas = 0;
+  for (const b of B.beers) {
+    const claves = [b.source ? b.source.replace(/^keep:/, '') : '', b.name].filter(Boolean).map(sinTildes);
+    const u = claves.map(k => porClave.get(k)).find(Boolean);
+    if (!u) continue;
+    usadas.add(u);
+    if (soloVacias && b.lat != null) continue;
+    if (u.place) b.place = u.place;
+    if (u.city) b.city = u.city;
+    if (u.country) b.country = u.country;
+    if (u.lat != null && u.lng != null) { b.lat = +Number(u.lat).toFixed(6); b.lng = +Number(u.lng).toFixed(6); }
+    tocadas++;
+  }
+  return { tocadas, sinPareja: lista.filter(u => !usadas.has(u)).map(u => u.nota || u.name || u.archivo || '?') };
+}
+
+function pickUbicaciones() {
+  const input = el('json-input');
+  input.value = '';
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const r = aplicaUbicaciones(JSON.parse(await file.text()), false);
+      if (!r.tocadas) { status('Ese archivo no cuadra con ninguna cerveza de la lista', true); return; }
+      const ok = await saveBeers();
+      await showBeers();
+      if (ok) status(`✓ ${r.tocadas} cerveza${r.tocadas === 1 ? '' : 's'} con su sitio`
+        + (r.sinPareja.length ? `. ${r.sinPareja.length} sin pareja: ${r.sinPareja.slice(0, 3).join(', ')}…` : ''));
+    } catch (e) { status('No se pudo leer el archivo de ubicaciones: ' + e.message, true); }
+  };
+  input.click();
+}
+
 /* ══════════════════════════════════════════════════════════
    IMPORTAR DE GOOGLE KEEP
    Se elige la carpeta Keep de un export de Google Takeout: cada nota
@@ -1327,10 +1513,11 @@ let impNotas = [];       // notas leídas del Takeout
 let impArchivos = null;  // clave de archivo -> handle de la imagen
 let impSel = null;       // etiquetas marcadas para importar
 let impNombre = '';      // nombre de la carpeta elegida
+let impUbic = null;      // ubicaciones.json encontrado junto a las notas
 
 async function importKeep() {
   if (!('showDirectoryPicker' in window)) {
-    status('Este navegador no permite abrir carpetas. Haz la importación desde Chrome en un ordenador.', true); return;
+    status('Este navegador no sabe abrir carpetas. Usa Chrome.', true); return;
   }
   if (pickerBusy) return;
   pickerBusy = true;
@@ -1346,10 +1533,16 @@ async function importKeep() {
     impNombre = dir.name;
     impNotas = [];
     impArchivos = new Map();
+    impUbic = null;
     const jsons = [];
     for await (const entry of dir.values()) {
       if (entry.kind !== 'file') continue;
-      if (/\.json$/i.test(entry.name)) { if (entry.name !== 'cervezas.json') jsons.push(entry); }
+      if (/\.json$/i.test(entry.name)) {
+        if (entry.name === 'ubicaciones.json') {
+          try { impUbic = JSON.parse(await (await entry.getFile()).text()); }
+          catch (_) { status('El ubicaciones.json de esa carpeta está mal formado y se ignora', true); }
+        } else if (entry.name !== 'cervezas.json') jsons.push(entry);
+      }
       else if (/\.(jpe?g|png|gif|webp|heic)$/i.test(entry.name)) impArchivos.set(claveArchivo(entry.name), entry);
     }
     if (!jsons.length) {
@@ -1439,7 +1632,9 @@ function renderImportPanel() {
       ${muestra ? `<div style="border-top:1px solid #d9c99f;margin-top:.7rem;padding-top:.5rem">
         <span class="muted">Así quedarían las primeras:</span>${muestra}</div>` : ''}
       <p class="muted" style="margin-top:.8rem">El estilo se saca del nombre y la puntuación del texto de la nota:
-        son una propuesta, quedan marcadas como «sin confirmar» hasta que las edites. El sitio y el país se quedan vacíos.</p>
+        son una propuesta, quedan marcadas como «sin confirmar» hasta que las edites.
+        ${impUbic ? 'En la carpeta hay un <code>ubicaciones.json</code>: el sitio, la ciudad y el país se rellenan con él.'
+          : 'El sitio, la ciudad y el país se quedan vacíos: los pones tú o los traes luego con el botón 📍.'}</p>
 
       <div class="row end">
         <button class="tb-btn" onclick="showBeers()">Cancelar</button>
@@ -1458,6 +1653,7 @@ function cervezaDeNota(n, i) {
     brewery: '',
     style: estiloDesdeTitulo(n.titulo),
     place: '',
+    city: '',
     country: '',
     datetime: fecha,
     rating: nota,
@@ -1497,10 +1693,12 @@ async function runImport() {
     // se guarda cada 20 para no perderlo todo si algo falla a mitad
     if (i % 20 === 19) await saveBeers();
   }
+  const conSitio = impUbic ? aplicaUbicaciones(impUbic, true).tocadas : 0;
   const ok = await saveBeers();
-  impNotas = []; impArchivos = null; impSel = null;
+  impNotas = []; impArchivos = null; impSel = null; impUbic = null;
   await showBeers();
-  if (ok) status(`✓ ${nuevas.length} cervezas importadas${fotosOk ? `, ${fotosOk} fotos copiadas` : ''}${fotosNo ? `. ${fotosNo} fotos no se pudieron leer` : ''}`);
+  if (ok) status(`✓ ${nuevas.length} cervezas importadas${fotosOk ? `, ${fotosOk} fotos copiadas` : ''}`
+    + `${conSitio ? `, ${conSitio} con su sitio` : ''}${fotosNo ? `. ${fotosNo} fotos no se pudieron leer` : ''}`);
 }
 
 /* ─── TEMA ─── */

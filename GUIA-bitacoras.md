@@ -76,7 +76,9 @@ propia, y recuerda la carpeta elegida entre sesiones.
 La primera vez que la abras con internet se guarda todo lo que necesita; a partir de ahí funciona sin conexión.
 Las tipografías van en el propio repositorio (`lib/fuentes/`), así que la app se ve igual con o sin internet.
 
-En el móvil no funciona: la API que lee carpetas del disco no existe en Android ni en iOS.
+En el móvil funciona igual, y de hecho es el uso principal: Chrome en Android abre la carpeta a través del
+proveedor de archivos del sistema, así que vale una carpeta de Google Drive sincronizada. En iPhone y iPad no,
+porque Safari no trae la API que lee carpetas.
 
 ## Uso de la app
 
@@ -121,8 +123,8 @@ Todo se guarda en `Cervezas/cervezas.json` de tu carpeta raíz. La app crea la c
 
 ### Traer las cervezas de Google Keep
 
-Si venías apuntándolas en Keep, se importan de una vez. Este paso se hace **desde Chrome en un ordenador**,
-una sola vez:
+Si venías apuntándolas en Keep, se importan de una vez. Es más cómodo hacerlo en un ordenador —hay que
+descomprimir un zip—, pero desde el móvil también vale si dejas la carpeta descomprimida en Drive:
 
 1. Entra en [takeout.google.com](https://takeout.google.com), pulsa **No seleccionar ninguno** y marca solo
    **Keep**. Exporta y descarga el zip.
@@ -139,6 +141,32 @@ la ficha y las edites. El sitio y el país se quedan vacíos: eso lo pones tú, 
 países.
 
 Reimportar la misma carpeta no duplica nada: las notas que ya entraron se reconocen y se saltan.
+
+### El mapa
+
+Cada cerveza puede llevar un punto en el mapa, además de sitio, ciudad y país. En la ficha, **📍 Estoy aquí**
+lo toma del GPS y un toque en el mapa lo pone donde quieras; el marcador se arrastra para afinarlo. Arriba de
+la lista sale un mapa con todas: cada chincheta abre su nombre y un botón para saltar a la ficha, y el buscador
+también filtra los marcadores, así que buscar «Bélgica» deja en el mapa solo las belgas.
+
+**Las ubicaciones de las notas viejas se preparan fuera.** La app no sabe convertir «en Baños de Montemayor» en
+un punto del mapa: eso necesita un geocodificador y aquí no lo hay, porque tiene que funcionar sin conexión.
+Se hace en un archivo aparte, `ubicaciones.json`, con una entrada por nota:
+
+```json
+{
+  "schemaVersion": 1,
+  "ubicaciones": [
+    { "nota": "Ambiciosas Ambar", "place": "Casa rural", "city": "Baños de Montemayor",
+      "country": "España", "lat": 40.3078, "lng": -5.8567 }
+  ]
+}
+```
+
+`nota` es el título de la nota de Keep, que es el nombre de la cerveza. Ese archivo se usa de dos maneras:
+déjalo dentro de la carpeta `Keep` antes de importar y se aplica solo, o pulsa **📍** en la pestaña de
+Cervezas y elígelo cuando quieras, también sobre cervezas que ya estén dentro. Lo que no cuadre con ninguna
+ficha se avisa al terminar.
 
 ## El recuerdo del viaje
 

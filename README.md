@@ -57,8 +57,9 @@ la primera vez sin que tengas que hacer nada.
 
 ## Cervezas
 
-Una tercera pestaña para las cervezas que se prueban por ahí: nombre, cervecera, estilo, sitio, país, fecha,
-puntuación de 0 a 5, notas y fotos. La lista tiene buscador y una cuenta de cervezas, países y nota media.
+Una tercera pestaña para las cervezas que se prueban por ahí: nombre, cervecera, estilo, sitio, ciudad, país,
+fecha, puntuación de 0 a 5, notas, fotos y un punto en el mapa. La lista tiene buscador —que filtra también los
+marcadores del mapa— y una cuenta de cervezas, países y nota media.
 
 Viven en `Cervezas/cervezas.json` dentro de tu carpeta raíz, con sus fotos al lado.
 
@@ -66,6 +67,10 @@ Si ya tenías las cervezas apuntadas en **Google Keep**, el botón 📥 las impo
 [Google Takeout](https://takeout.google.com), descomprime el zip y elige la carpeta `Keep`. La app lee las
 notas, copia sus fotos a `Cervezas/` y te deja elegir qué etiquetas traer. El estilo y la puntuación se
 proponen a partir del texto y quedan marcados como «sin confirmar» hasta que los edites.
+
+Los sitios de esas notas se preparan fuera de la app, en un `ubicaciones.json` con una entrada por nota: sin
+conexión no hay geocodificador que convierta «en Baños de Montemayor» en coordenadas. Se aplica al importar,
+si está en la carpeta `Keep`, o después con el botón 📍.
 
 ## Formato de los viajes
 

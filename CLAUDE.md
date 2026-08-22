@@ -67,8 +67,13 @@ Bloques principales, en orden dentro del `<script>`:
 - **Momentos del día** — `renderDayMoments()`, `saveDayMoment()`: lo que pasó fuera del plan, con ubicación
   opcional del GPS o marcada en el mapa. Nunca escribe en `route`: el itinerario preparado es de solo lectura.
 - **Cervezas** — `showBeers()`, `renderBeerList()`, formulario y `importKeep()`: las cervezas probadas por el
-  mundo, en `Cervezas/cervezas.json`. Cada una lleva `name`, `brewery`, `style`, `place`, `country`, `datetime`,
-  `rating` (0–5), `notes` y `photos`. El importador lee la carpeta `Keep` de un export de Google Takeout: una
+  mundo, en `Cervezas/cervezas.json`. Cada una lleva `name`, `brewery`, `style`, `place`, `city`, `country`,
+  `datetime`, `rating` (0–5), `notes`, `photos` y, opcional, `lat`/`lng`. El mapa de la lista (`initBeerMap()`)
+  sigue al buscador; el del formulario (`initBeerFormMap()`) es de una sola cerveza y cualquier toque mueve su
+  marcador. Los dos van con `zoomAnimation: false`: al cambiar de pantalla se destruye el mapa y una animación
+  de zoom en vuelo revienta al terminar sobre un contenedor que ya no existe. `aplicaUbicaciones()` vuelca un
+  `ubicaciones.json` preparado fuera sobre las fichas, casándolo por nombre de nota — aquí no hay geocodificador
+  y sin conexión no podría haberlo. El importador lee la carpeta `Keep` de un export de Google Takeout: una
   nota por cerveza, con sus fotos sueltas al lado. `estiloDesdeTitulo()` saca el estilo del título y nunca del
   texto (está lleno de «parecido a una IPA»); `puntuacionDesdeTexto()` deduce la nota del adjetivo y la marca
   con `ratingGuessed` para que se vea que es una propuesta. `source` (`keep:<archivo>`) evita duplicar al
