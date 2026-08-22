@@ -21,9 +21,12 @@ Viajes/                          ← carpeta raíz (la eliges una vez en la app)
 │   └─ bitacora.json
 ├─ roma-2027/
 │   └─ bitacora.json
-└─ Momentos/
-    ├─ momentos.json             ← instantes sueltos (la crea la app sola)
-    └─ ....jpg
+├─ Momentos/
+│   ├─ momentos.json             ← instantes sueltos (la crea la app sola)
+│   └─ ....jpg
+└─ Cervezas/
+    ├─ cervezas.json             ← las cervezas probadas (la crea la app sola)
+    └─ cerveza_....jpg
 ```
 
 La app recorre las subcarpetas de la raíz y muestra como viaje cualquiera que contenga un `bitacora.json`. No
@@ -107,6 +110,35 @@ su globo tiene un enlace para saltar al día en el diario. Salen también en el 
 **La ruta preparada no se toca nunca.** Los pasos de `route` siguen siendo lo que se planeó; esto se guarda
 aparte, en `moments` del `bitacora.json`. Así se puede ver a la vez lo previsto y lo que pasó de verdad, y
 regenerar el viaje desde el proyecto de Claude sin perder nada de lo vuestro.
+
+## Cervezas
+
+La pestaña **🍺 Cervezas** es un cuaderno aparte, fuera de los viajes: cada cerveza que pruebas con su nombre,
+cervecera, estilo, sitio, país, fecha, puntuación de 0 a 5, notas y fotos. Arriba se ve cuántas llevas, de
+cuántos países y la nota media, y el buscador mira en todos los campos a la vez.
+
+Todo se guarda en `Cervezas/cervezas.json` de tu carpeta raíz. La app crea la carpeta sola la primera vez.
+
+### Traer las cervezas de Google Keep
+
+Si venías apuntándolas en Keep, se importan de una vez. Este paso se hace **desde Chrome en un ordenador**,
+una sola vez:
+
+1. Entra en [takeout.google.com](https://takeout.google.com), pulsa **No seleccionar ninguno** y marca solo
+   **Keep**. Exporta y descarga el zip.
+2. Descomprímelo. Dentro de `Takeout/Keep/` hay un `.json` y un `.html` por nota, y las fotos sueltas.
+3. En la app, pestaña Cervezas → **📥**, y elige esa carpeta `Keep`.
+4. La app te enseña las etiquetas que ha encontrado, con cuántas notas tiene cada una. Marca las de cerveza:
+   lo que no marques se queda fuera. Si tienes una etiqueta que se llame «Cervezas» viene marcada de entrada.
+5. Al importar copia las fotos a `Cervezas/` y escribe las fichas.
+
+**El estilo y la puntuación son una propuesta.** El estilo sale del nombre de la cerveza (nunca del texto,
+donde un «parecido a una IPA» engañaría) y la puntuación, del adjetivo que usaste: «riquísima» son cinco
+estrellas, «no repetir» una. Las puntuaciones deducidas salen marcadas con **≈ sin confirmar** hasta que abras
+la ficha y las edites. El sitio y el país se quedan vacíos: eso lo pones tú, y es lo que alimenta la cuenta de
+países.
+
+Reimportar la misma carpeta no duplica nada: las notas que ya entraron se reconocen y se saltan.
 
 ## El recuerdo del viaje
 

@@ -297,7 +297,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 
 
 /* ───── MOMENTOS ───── */
-.tabs{display:flex;gap:.4rem;justify-content:center;margin:0 0 1.2rem}
+.tabs{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center;margin:0 0 1.2rem}
 .tab{background:#123a5e;color:#a8cce0;border:1px solid #2a5f8a;border-radius:20px;padding:.35rem .95rem;font-size:.82rem}
 .tab.on{background:var(--accent);color:#1a1208;border-color:var(--accent2);font-weight:700}
 .tb-btn.big{display:block;margin:0 auto 1.2rem;padding:.6rem 1.2rem;font-size:.9rem}
@@ -325,6 +325,34 @@ textarea:focus{outline:none;border-color:var(--accent)}
   font-family:inherit;font-size:.85rem;background:#fff;font-weight:400}
 .muted{color:#7a6a52;font-size:.82rem;font-weight:400}
 .photo-thumb .ph{width:100%;height:100%;background:#efe4cb}
+
+/* ───── CERVEZAS ───── */
+.beer-tools{display:flex;gap:.4rem;margin:0 0 1.1rem;flex-wrap:wrap}
+.beer-tools input{flex:1;min-width:150px;border:2px solid #d9c99f;border-radius:8px;padding:.45rem;background:#fffdf7;font-size:.9rem}
+.beer-list{display:grid;gap:.9rem}
+.beer-card{background:var(--paper);border:3px solid var(--line);border-radius:12px;padding:.9rem;
+  box-shadow:0 4px 16px rgba(0,0,0,.4);display:flex;gap:.8rem;align-items:flex-start}
+.beer-photo{flex:0 0 92px;width:92px;aspect-ratio:1;border-radius:8px;overflow:hidden;border:2px solid #d9c99f;
+  background:#fff8ea;display:flex;align-items:center;justify-content:center;font-size:1.9rem}
+.beer-photo img{width:100%;height:100%;object-fit:cover;cursor:pointer}
+.beer-body{flex:1;min-width:0}
+.beer-name{font-family:var(--display);font-size:1.2rem;color:var(--panel);line-height:1.15}
+.beer-meta{font-size:.78rem;color:#7a6a52;margin-top:.15rem;display:flex;flex-wrap:wrap;gap:.15rem .6rem}
+.beer-stars{color:var(--accent);font-size:.95rem;letter-spacing:.08em;margin-top:.25rem}
+.beer-stars .dim{color:#c9b98f}
+.beer-stars .guess{color:#7a6a52;font-size:.7rem;font-style:italic;letter-spacing:0;margin-left:.35rem}
+.beer-notes{font-size:.9rem;margin-top:.35rem;white-space:pre-wrap;overflow-wrap:anywhere}
+.beer-actions{display:flex;gap:.4rem;justify-content:flex-end;margin-top:.5rem}
+.beer-actions .tb-btn{background:#e6dbc0;color:var(--panel);border-color:#c9b98f}
+.star-pick{display:flex;gap:.15rem;align-items:center;margin-top:.2rem}
+.star-pick button{background:none;border:none;font-size:1.6rem;color:#c9b98f;padding:0 .1rem;line-height:1}
+.star-pick button.on{color:var(--accent)}
+.star-pick .muted{margin-left:.5rem}
+.imp-chips{display:flex;flex-wrap:wrap;gap:.35rem;margin:.5rem 0 .9rem}
+.imp-chips button{background:#e6dbc0;color:var(--panel);border:2px solid #c9b98f;border-radius:14px;
+  padding:.2rem .7rem;font-size:.8rem}
+.imp-chips button.on{background:var(--panel);color:var(--accent2);border-color:var(--panel)}
+@media(max-width:520px){.beer-photo{flex-basis:74px;width:74px}}
 
 /* ───── LIGHTBOX ───── */
 .lightbox{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:1rem}
@@ -680,8 +708,9 @@ let momDraft = null;    // momento en edición
 let momUrls = {};       // archivo -> objectURL de su miniatura
 
 function tabs(active) {
-  const t = (id, icon, label) => `<button class="tab ${active === id ? 'on' : ''}" onclick="${id === 'viajes' ? 'showLibrary()' : 'showMoments()'}">${icon} ${label}</button>`;
-  return `<div class="tabs">${t('viajes', '🧭', 'Viajes')}${t('momentos', '✨', 'Momentos')}</div>`;
+  const abre = { viajes: 'showLibrary()', momentos: 'showMoments()', cervezas: 'showBeers()' };
+  const t = (id, icon, label) => `<button class="tab ${active === id ? 'on' : ''}" onclick="${abre[id]}">${icon} ${label}</button>`;
+  return `<div class="tabs">${t('viajes', '🧭', 'Viajes')}${t('momentos', '✨', 'Momentos')}${t('cervezas', '🍺', 'Cervezas')}</div>`;
 }
 
 async function loadMoments() {
@@ -929,6 +958,549 @@ async function deleteMoment(id) {
   await saveMoments();
   await showMoments();
   status('Momento borrado');
+}
+
+/* ══════════════════════════════════════════════════════════
+   CERVEZAS — las que se van probando por el mundo
+   Se guardan en <carpeta raíz>/Cervezas/cervezas.json
+   ══════════════════════════════════════════════════════════ */
+let beerDir = null;      // carpeta Cervezas
+let B = null;            // { schemaVersion, beers: [] }
+let beerDraft = null;    // cerveza en edición
+let beerUrls = {};       // archivo -> objectURL de su miniatura
+let beerQuery = '';      // texto del buscador
+
+const sinTildes = s => (s == null ? '' : String(s)).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+const fmtFecha = iso => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+async function loadBeers() {
+  if (B) return B;
+  beerDir = await rootHandle.getDirectoryHandle('Cervezas', { create: true });
+  try {
+    const fh = await beerDir.getFileHandle('cervezas.json');
+    B = JSON.parse(await (await fh.getFile()).text());
+  } catch (_) { B = { schemaVersion: 1, beers: [] }; }
+  if (!Array.isArray(B.beers)) B.beers = [];
+  return B;
+}
+
+async function saveBeers() {
+  if (!await ensurePermission(beerDir)) { status('Sin permiso de escritura', true); return false; }
+  await writeFile('cervezas.json', new Blob([JSON.stringify(B, null, 2)], { type: 'application/json' }), beerDir);
+  return true;
+}
+
+/* ─── LISTA ─── */
+function estrellas(b) {
+  const v = Math.max(0, Math.min(5, Math.round(Number(b.rating) || 0)));
+  if (!v) return '';
+  const aviso = b.ratingGuessed
+    ? '<span class="guess" title="Deducida del texto al importar. Edítala para confirmarla.">≈ sin confirmar</span>' : '';
+  return `<div class="beer-stars">${'★'.repeat(v)}<span class="dim">${'★'.repeat(5 - v)}</span>${aviso}</div>`;
+}
+
+function beerCard(b) {
+  const fotos = b.photos || [];
+  const lugar = [b.place, b.country].filter(Boolean).join(', ');
+  const meta = [b.style, lugar, fmtFecha(b.datetime), fotos.length > 1 ? fotos.length + ' fotos' : '']
+    .filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('');
+  return `<div class="beer-card">
+    <div class="beer-photo" id="bt-${esc(b.id)}">${fotos.length ? '' : '🍺'}</div>
+    <div class="beer-body">
+      <div class="beer-name">${esc(b.name)}</div>
+      ${b.brewery ? `<div class="beer-meta"><span>${esc(b.brewery)}</span></div>` : ''}
+      ${meta ? `<div class="beer-meta">${meta}</div>` : ''}
+      ${estrellas(b)}
+      ${b.notes ? `<div class="beer-notes">${esc(b.notes)}</div>` : ''}
+      <div class="beer-actions">
+        <button class="tb-btn" onclick="editBeer('${esc(b.id)}')">✎ Editar</button>
+        <button class="tb-btn" onclick="deleteBeer('${esc(b.id)}')">🗑 Borrar</button>
+      </div>
+    </div></div>`;
+}
+
+async function showBeers() {
+  tripDir = null; D = null; beerDraft = null;
+  applyTheme('crucero');
+  el('btn-pdf').style.display = el('btn-zip').style.display = el('btn-recuerdo').style.display = 'none';
+  el('btn-library').style.display = 'none';
+  el('score-bar').style.display = 'none';
+
+  if (!rootHandle) { showLibrary(); return; }
+  try { await loadBeers(); }
+  catch (e) { status('No se pudo abrir la carpeta Cervezas: ' + e.message, true); return; }
+
+  if (!B.beers.length) {
+    el('app').innerHTML = `<div class="library">
+      <div class="lib-title">Bitácoras</div>
+      ${tabs('cervezas')}
+      <div class="lib-sub">Ninguna cerveza apuntada todavía</div>
+      <div class="lib-empty">
+        <h2>El cuaderno de cervezas</h2>
+        <p>Cada cerveza que pruebas por ahí: cómo estaba, dónde fue y con quién.</p>
+        <p style="font-size:.82rem;color:#6b5a3a">Se guardan en <code>${esc(rootHandle.name)}/Cervezas/</code>, junto a tus viajes.</p>
+        <button class="tb-btn primary" onclick="newBeer()">🍺 Nueva cerveza</button>
+        <button class="tb-btn" onclick="importKeep()">📥 Importar de Google Keep</button>
+      </div></div>`;
+    return;
+  }
+
+  el('app').innerHTML = `<div class="library">
+    <div class="lib-title">Bitácoras</div>
+    ${tabs('cervezas')}
+    <div class="lib-sub" id="beer-count"></div>
+    <div class="beer-tools">
+      <input type="search" id="beer-q" placeholder="Buscar por nombre, estilo, sitio…" value="${esc(beerQuery)}"
+        oninput="filterBeers(this.value)">
+      <button class="tb-btn primary" onclick="newBeer()">🍺 Nueva</button>
+      <button class="tb-btn" onclick="importKeep()" title="Importar notas de Google Keep">📥</button>
+    </div>
+    <div class="beer-list" id="beer-list"></div></div>`;
+  await renderBeerList();
+}
+
+function filterBeers(v) { beerQuery = v; renderBeerList(); }
+
+async function renderBeerList() {
+  const caja = el('beer-list');
+  if (!caja) return;
+  const q = sinTildes(beerQuery).trim();
+  const todas = B.beers.slice().sort((a, b) => (b.datetime || '').localeCompare(a.datetime || ''));
+  const lista = q ? todas.filter(b => sinTildes([b.name, b.brewery, b.style, b.place, b.country, b.notes].join(' ')).includes(q)) : todas;
+
+  const paises = new Set(B.beers.map(b => (b.country || '').trim()).filter(Boolean));
+  const punt = B.beers.filter(b => Number(b.rating) > 0);
+  const media = punt.length ? punt.reduce((s, b) => s + Number(b.rating), 0) / punt.length : 0;
+  const cuenta = el('beer-count');
+  if (cuenta) cuenta.innerHTML = esc([
+    q ? `${lista.length} de ${B.beers.length} cervezas` : `${B.beers.length} cerveza${B.beers.length === 1 ? '' : 's'}`,
+    paises.size ? `${paises.size} paí${paises.size === 1 ? 's' : 'ses'}` : '',
+    media ? `media ${media.toFixed(1).replace('.', ',')}` : ''
+  ].filter(Boolean).join(' · '));
+
+  caja.innerHTML = lista.length ? lista.map(beerCard).join('')
+    : '<div class="lib-empty"><h2>Nada con esa búsqueda</h2><p>Prueba con otra palabra.</p></div>';
+
+  for (const b of lista) {
+    const foto = (b.photos || [])[0];
+    if (!foto) continue;
+    const box = el('bt-' + b.id);
+    if (!box) continue;
+    let src = beerUrls[foto] || await cacheGet(foto, 'Cervezas');
+    if (!src) {
+      try {
+        const file = await (await beerDir.getFileHandle(foto)).getFile();
+        const max = thumbSize(false);
+        const thumb = await compressImage(file, max, max, thumbQuality());
+        src = URL.createObjectURL(thumb);
+        await cacheSet(foto, thumb, 'Cervezas');
+      } catch (_) { continue; }
+    }
+    beerUrls[foto] = src;
+    box.innerHTML = `<img src="${src}" alt="" loading="lazy" onclick="openBeerPhoto('${esc(foto)}')">`;
+  }
+}
+
+async function openBeerPhoto(file) {
+  const img = el('lightbox-img');
+  img.src = beerUrls[file] || '';
+  el('lightbox').classList.add('open');
+  try {
+    const full = URL.createObjectURL(await (await beerDir.getFileHandle(file)).getFile());
+    if (el('lightbox').classList.contains('open')) img.src = full;
+  } catch (_) {}
+}
+
+/* ─── FORMULARIO ─── */
+function newBeer() {
+  beerDraft = { id: 'b' + Date.now(), name: '', brewery: '', style: '', place: '', country: '',
+    datetime: nowLocalISO(), rating: 0, notes: '', photos: [] };
+  renderBeerForm();
+}
+
+function editBeer(id) {
+  const b = B.beers.find(x => x.id === id);
+  if (!b) return;
+  beerDraft = JSON.parse(JSON.stringify(b));
+  if (!Array.isArray(beerDraft.photos)) beerDraft.photos = [];
+  renderBeerForm();
+}
+
+function renderBeerForm() {
+  const d = beerDraft;
+  const esNuevo = !B.beers.some(x => x.id === d.id);
+  const sugerencias = arr => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+    .map(v => `<option value="${esc(v)}">`).join('');
+  const v = Math.max(0, Math.min(5, Math.round(Number(d.rating) || 0)));
+  el('app').innerHTML = `<div class="library">
+    <div class="lib-title">${esNuevo ? 'Nueva cerveza' : 'Editar cerveza'}</div>
+    <div class="panel">
+      <label class="fld">Cerveza
+        <input type="text" id="beer-name" placeholder="Cómo se llama" value="${esc(d.name || '')}"></label>
+
+      <label class="fld">Cervecera
+        <input type="text" id="beer-brewery" placeholder="Quién la hace (opcional)" value="${esc(d.brewery || '')}"
+          list="dl-breweries"><datalist id="dl-breweries">${sugerencias(B.beers.map(b => b.brewery))}</datalist></label>
+
+      <label class="fld">Estilo
+        <input type="text" id="beer-style" placeholder="IPA, Lager, Stout…" value="${esc(d.style || '')}"
+          list="dl-styles"><datalist id="dl-styles">${sugerencias(ESTILOS.map(e => e[1]).concat(B.beers.map(b => b.style)))}</datalist></label>
+
+      <div class="row">
+        <label class="fld" style="flex:1;margin:0">Sitio
+          <input type="text" id="beer-place" placeholder="Bar, ciudad…" value="${esc(d.place || '')}"
+            list="dl-places"><datalist id="dl-places">${sugerencias(B.beers.map(b => b.place))}</datalist></label>
+        <label class="fld" style="flex:1;margin:0">País
+          <input type="text" id="beer-country" placeholder="España, Bélgica…" value="${esc(d.country || '')}"
+            list="dl-countries"><datalist id="dl-countries">${sugerencias(B.beers.map(b => b.country))}</datalist></label>
+      </div>
+
+      <label class="fld" style="margin-top:.9rem">Cuándo
+        <input type="datetime-local" id="beer-dt" value="${esc(d.datetime || '')}"></label>
+
+      <div class="fld">Puntuación
+        <div class="star-pick">
+          ${[1, 2, 3, 4, 5].map(n => `<button class="${n <= v ? 'on' : ''}" onclick="setBeerRating(${n})"
+            title="${n} de 5">★</button>`).join('')}
+          <span class="muted">${v ? 'Toca la misma estrella para quitarla' : 'Sin puntuar'}</span>
+        </div></div>
+
+      <label class="fld">Notas
+        <textarea id="beer-notes" placeholder="Cómo estaba, dónde fue, con quién…">${esc(d.notes || '')}</textarea></label>
+
+      <div class="fld">Fotos
+        <div class="photo-grid" id="beer-fotos"></div></div>
+
+      <div class="row end">
+        <button class="tb-btn" onclick="showBeers()">Cancelar</button>
+        <button class="tb-btn primary" onclick="saveBeer()">Guardar cerveza</button>
+      </div>
+    </div></div>`;
+  renderBeerDraftPhotos();
+}
+
+function syncBeerDraft() {
+  if (!beerDraft) return;
+  const campos = { name: 'beer-name', brewery: 'beer-brewery', style: 'beer-style',
+    place: 'beer-place', country: 'beer-country', notes: 'beer-notes' };
+  Object.entries(campos).forEach(([k, id]) => { const n = el(id); if (n) beerDraft[k] = n.value.trim(); });
+  const dt = el('beer-dt');
+  if (dt && dt.value) beerDraft.datetime = dt.value;
+}
+
+function setBeerRating(n) {
+  syncBeerDraft();
+  beerDraft.rating = (Number(beerDraft.rating) === n) ? 0 : n;
+  delete beerDraft.ratingGuessed;
+  renderBeerForm();
+}
+
+function renderBeerDraftPhotos() {
+  const grid = el('beer-fotos');
+  if (!grid) return;
+  grid.innerHTML = (beerDraft.photos || []).map(f =>
+    `<div class="photo-thumb">${beerUrls[f] ? `<img src="${beerUrls[f]}" alt="">` : '<div class="ph"></div>'}
+      <button class="del-btn" onclick="removeBeerDraftPhoto('${esc(f)}')">✕</button></div>`).join('')
+    + `<button class="add-photo" onclick="addBeerPhotos()"><span style="font-size:1.4rem">＋</span>Añadir</button>`;
+}
+
+function addBeerPhotos() {
+  const input = el('photo-input');
+  input.value = '';
+  input.onchange = async () => {
+    if (!input.files.length) return;
+    syncBeerDraft();
+    if (!await ensurePermission(beerDir)) { status('Sin permiso de escritura', true); return; }
+    status('Guardando fotos…');
+    for (const file of input.files) {
+      try {
+        const blob = await compressImage(file, 1400, 1400, 0.78);
+        const name = `cerveza_${beerDraft.id}_${beerDraft.photos.length}_${Date.now()}.jpg`;
+        await writeFile(name, blob, beerDir);
+        const max = thumbSize(false);
+        const thumb = await compressImage(blob, max, max, thumbQuality());
+        beerUrls[name] = URL.createObjectURL(thumb);
+        await cacheSet(name, thumb, 'Cervezas');
+        beerDraft.photos.push(name);
+      } catch (e) { status('Una foto no se pudo guardar: ' + e.message, true); }
+    }
+    renderBeerDraftPhotos();
+    status('✓ Fotos añadidas');
+  };
+  input.click();
+}
+
+function removeBeerDraftPhoto(file) {
+  syncBeerDraft();
+  beerDraft.photos = beerDraft.photos.filter(f => f !== file);
+  cacheDel(file, 'Cervezas');
+  if (beerDir) beerDir.removeEntry(file).catch(() => {});
+  delete beerUrls[file];
+  renderBeerDraftPhotos();
+}
+
+async function saveBeer() {
+  syncBeerDraft();
+  if (!beerDraft.name) { status('Ponle nombre a la cerveza', true); return; }
+  if (!beerDraft.datetime) beerDraft.datetime = nowLocalISO();
+  const i = B.beers.findIndex(x => x.id === beerDraft.id);
+  if (i >= 0) B.beers[i] = beerDraft; else B.beers.push(beerDraft);
+  const ok = await saveBeers();
+  beerDraft = null;
+  await showBeers();
+  if (ok) status('✓ Cerveza guardada');
+}
+
+async function deleteBeer(id) {
+  const b = B.beers.find(x => x.id === id);
+  if (!b) return;
+  if (!confirm(`¿Borrar "${b.name}"? También se borrarán sus fotos.`)) return;
+  for (const f of (b.photos || [])) {
+    cacheDel(f, 'Cervezas');
+    try { await beerDir.removeEntry(f); } catch (_) {}
+    delete beerUrls[f];
+  }
+  B.beers = B.beers.filter(x => x.id !== id);
+  await saveBeers();
+  await showBeers();
+  status('Cerveza borrada');
+}
+
+/* ══════════════════════════════════════════════════════════
+   IMPORTAR DE GOOGLE KEEP
+   Se elige la carpeta Keep de un export de Google Takeout: cada nota
+   es un .json con su texto, su fecha y los nombres de sus fotos, que
+   están sueltas en la misma carpeta.
+   ══════════════════════════════════════════════════════════ */
+
+// El estilo se saca solo del título: en el texto abundan los "parecido a una IPA"
+// que convertirían en IPA una cerveza que no lo es. Lo específico va primero.
+const ESTILOS = [
+  ['imperial ipa', 'Imperial IPA'], ['doble ipa', 'Doble IPA'], ['double ipa', 'Doble IPA'],
+  ['session ipa', 'Session IPA'], ['neipa', 'NEIPA'], ['ipa', 'IPA'],
+  ['pale ale', 'Pale Ale'], ['blonde ale', 'Blonde Ale'], ['golden ale', 'Golden Ale'],
+  ['amber ale', 'Amber Ale'], ['brown ale', 'Brown Ale'], ['red ale', 'Red Ale'],
+  ['imperial stout', 'Imperial Stout'], ['stout', 'Stout'], ['porter', 'Porter'],
+  ['barley wine', 'Barley Wine'], ['pilsner', 'Pilsner'], ['pilsen', 'Pilsner'], ['lager', 'Lager'],
+  ['weizen', 'Weizen'], ['weiss', 'Weissbier'], ['witbier', 'Witbier'], ['trigo', 'De trigo'],
+  ['quadrupel', 'Quadrupel'], ['tripel', 'Tripel'], ['dubbel', 'Dubbel'], ['saison', 'Saison'],
+  ['doppelbock', 'Doppelbock'], ['bock', 'Bock'], ['kolsch', 'Kölsch'], ['gose', 'Gose'],
+  ['lambic', 'Lambic'], ['kriek', 'Kriek'], ['sour', 'Sour'], ['radler', 'Radler'],
+  ['sin alcohol', 'Sin alcohol'], ['sin gluten', 'Sin gluten'],
+  ['tostada', 'Tostada'], ['negra', 'Negra'], ['rubia', 'Rubia'],
+];
+
+// Las notas no llevan nota numérica, así que se deduce del adjetivo. Lo malo va
+// delante: un "no repetir" al final pesa más que el "rica" del principio.
+const PUNTUACIONES = [
+  [/\bno repetir\b|\bhorrible\b|\basquerosa\b|\bmalisima\b|\bimbebible\b|\binfumable\b/, 1],
+  [/\bmuy mala\b|\bbastante mala\b|\bmala\b|\bno me gusto\b|\bno me convencio\b/, 1],
+  [/\bfloja\b|\bregular\b|\bsosa\b|\baguada\b|\bdel monton\b|\bno esta mal\b/, 2],
+  [/\brica,? rica\b|\briquisima\b|\bexcelente\b|\bespectacular\b|\bbrutal\b|\bincreible\b|\bla mejor\b|\bmaravillosa\b|\bimpresionante\b/, 5],
+  [/\bbuenisima\b|\bme encanto\b|\bgenial\b|\brepetir\b|\bmuy buena\b|\bmuy rica\b|\bestupenda\b/, 4],
+  [/\bbuena\b|\brica\b|\bcorrecta\b|\baceptable\b|\bcumple\b|\besta bien\b/, 3],
+];
+
+function estiloDesdeTitulo(titulo) {
+  const t = sinTildes(titulo);
+  for (const [clave, nombre] of ESTILOS) {
+    if (new RegExp('\\b' + clave.replace(/ /g, '\\s+') + '\\b').test(t)) return nombre;
+  }
+  return '';
+}
+
+function puntuacionDesdeTexto(texto) {
+  const t = sinTildes(texto);
+  for (const [re, nota] of PUNTUACIONES) if (re.test(t)) return nota;
+  return 0;
+}
+
+const claveArchivo = n => sinTildes(String(n).split('/').pop().replace(/\.[^.]+$/, ''));
+
+let impNotas = [];       // notas leídas del Takeout
+let impArchivos = null;  // clave de archivo -> handle de la imagen
+let impSel = null;       // etiquetas marcadas para importar
+let impNombre = '';      // nombre de la carpeta elegida
+
+async function importKeep() {
+  if (!('showDirectoryPicker' in window)) {
+    status('Este navegador no permite abrir carpetas. Haz la importación desde Chrome en un ordenador.', true); return;
+  }
+  if (pickerBusy) return;
+  pickerBusy = true;
+  let dir = null;
+  try { dir = await window.showDirectoryPicker(); }
+  catch (e) { if (e.name !== 'AbortError') status('No se pudo abrir la carpeta: ' + e.message, true); }
+  finally { pickerBusy = false; }
+  if (!dir) return;
+
+  try {
+    await loadBeers();
+    status('Leyendo las notas…');
+    impNombre = dir.name;
+    impNotas = [];
+    impArchivos = new Map();
+    const jsons = [];
+    for await (const entry of dir.values()) {
+      if (entry.kind !== 'file') continue;
+      if (/\.json$/i.test(entry.name)) { if (entry.name !== 'cervezas.json') jsons.push(entry); }
+      else if (/\.(jpe?g|png|gif|webp|heic)$/i.test(entry.name)) impArchivos.set(claveArchivo(entry.name), entry);
+    }
+    if (!jsons.length) {
+      status('En esa carpeta no hay notas de Keep. Elige la carpeta "Keep" del export de Takeout.', true); return;
+    }
+    for (const entry of jsons) {
+      try {
+        const j = JSON.parse(await (await entry.getFile()).text());
+        if (j.isTrashed) continue;
+        const nota = notaDeKeep(j, entry.name);
+        if (nota) impNotas.push(nota);
+      } catch (_) { /* un .json que no es una nota: se ignora */ }
+    }
+    if (!impNotas.length) {
+      status('No he encontrado ninguna nota aprovechable en esa carpeta.', true); return;
+    }
+    const todas = etiquetasDeNotas().map(e => e.nombre);
+    const suenan = todas.filter(e => /cerve|beer|birra/i.test(e));
+    impSel = new Set(suenan.length ? suenan : (todas.length === 1 ? todas : []));
+    renderImportPanel();
+  } catch (e) { status('Fallo leyendo el export de Keep: ' + e.message, true); }
+}
+
+function notaDeKeep(j, archivo) {
+  const lista = Array.isArray(j.listContent)
+    ? j.listContent.map(x => (x.isChecked ? '✓ ' : '') + (x.text || '')).join('\n') : '';
+  const texto = (j.textContent || lista || '').trim();
+  const titulo = (j.title || '').trim();
+  if (!titulo && !texto) return null;
+  const usec = Number(j.createdTimestampUsec || j.userEditedTimestampUsec || 0);
+  const fotos = (j.attachments || []).map(a => a.filePath || a.fileName || '').filter(Boolean);
+  return {
+    archivo,
+    titulo: titulo || texto.split('\n')[0].slice(0, 80),
+    texto: titulo ? texto : texto.split('\n').slice(1).join('\n').trim(),
+    fecha: usec ? new Date(usec / 1000) : null,
+    etiquetas: (j.labels || []).map(l => l.name).filter(Boolean),
+    fotos
+  };
+}
+
+function etiquetasDeNotas() {
+  const cuenta = new Map();
+  for (const n of impNotas) {
+    const suyas = n.etiquetas.length ? n.etiquetas : ['(sin etiqueta)'];
+    for (const e of suyas) cuenta.set(e, (cuenta.get(e) || 0) + 1);
+  }
+  return [...cuenta.entries()].map(([nombre, n]) => ({ nombre, n }))
+    .sort((a, b) => b.n - a.n || a.nombre.localeCompare(b.nombre, 'es'));
+}
+
+const notasElegidas = () => impNotas.filter(n =>
+  (n.etiquetas.length ? n.etiquetas : ['(sin etiqueta)']).some(e => impSel.has(e)));
+
+function toggleImpEtiqueta(i) {
+  const e = etiquetasDeNotas()[i];
+  if (!e) return;
+  if (impSel.has(e.nombre)) impSel.delete(e.nombre); else impSel.add(e.nombre);
+  renderImportPanel();
+}
+
+function renderImportPanel() {
+  const etiquetas = etiquetasDeNotas();
+  const elegidas = notasElegidas();
+  const yaEstan = new Set(B.beers.map(b => b.source).filter(Boolean));
+  const nuevas = elegidas.filter(n => !yaEstan.has('keep:' + n.archivo));
+  const repes = elegidas.length - nuevas.length;
+  const conFoto = nuevas.reduce((s, n) => s + n.fotos.length, 0);
+  const muestra = nuevas.slice(0, 3).map(n => {
+    const c = cervezaDeNota(n, 0);
+    return `<div class="beer-meta" style="margin-top:.35rem"><span><b>${esc(c.name)}</b></span>
+      ${c.style ? `<span>${esc(c.style)}</span>` : ''}
+      ${c.rating ? `<span>${'★'.repeat(c.rating)}</span>` : '<span>sin puntuar</span>'}
+      ${c.photos.length ? `<span>${c.photos.length} foto${c.photos.length === 1 ? '' : 's'}</span>` : ''}</div>`;
+  }).join('');
+
+  el('app').innerHTML = `<div class="library">
+    <div class="lib-title">Importar de Keep</div>
+    <div class="lib-sub">${impNotas.length} nota${impNotas.length === 1 ? '' : 's'} en ${esc(impNombre)}</div>
+    <div class="panel">
+      <div class="panel-label">Qué notas traigo</div>
+      <p style="font-size:.88rem">Marca las etiquetas de las notas de cerveza. Lo que no marques se queda fuera.</p>
+      <div class="imp-chips">${etiquetas.map((e, i) =>
+        `<button class="${impSel.has(e.nombre) ? 'on' : ''}" onclick="toggleImpEtiqueta(${i})">${esc(e.nombre)} · ${e.n}</button>`).join('')}</div>
+
+      <p style="font-size:.88rem"><b>${nuevas.length}</b> se importarán${repes ? `, ${repes} ya estaban y se saltan` : ''}${conFoto ? `, con ${conFoto} foto${conFoto === 1 ? '' : 's'}` : ''}.</p>
+      ${muestra ? `<div style="border-top:1px solid #d9c99f;margin-top:.7rem;padding-top:.5rem">
+        <span class="muted">Así quedarían las primeras:</span>${muestra}</div>` : ''}
+      <p class="muted" style="margin-top:.8rem">El estilo se saca del nombre y la puntuación del texto de la nota:
+        son una propuesta, quedan marcadas como «sin confirmar» hasta que las edites. El sitio y el país se quedan vacíos.</p>
+
+      <div class="row end">
+        <button class="tb-btn" onclick="showBeers()">Cancelar</button>
+        <button class="tb-btn primary" onclick="runImport()" ${nuevas.length ? '' : 'disabled'}>Importar ${nuevas.length}</button>
+      </div>
+    </div></div>`;
+}
+
+function cervezaDeNota(n, i) {
+  const fecha = n.fecha && !isNaN(n.fecha)
+    ? new Date(n.fecha.getTime() - n.fecha.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+  const nota = puntuacionDesdeTexto([n.titulo, n.texto].join(' '));
+  const c = {
+    id: 'b' + Date.now() + '-' + i,
+    name: n.titulo,
+    brewery: '',
+    style: estiloDesdeTitulo(n.titulo),
+    place: '',
+    country: '',
+    datetime: fecha,
+    rating: nota,
+    notes: n.texto,
+    photos: n.fotos.slice(),
+    source: 'keep:' + n.archivo
+  };
+  if (nota) c.ratingGuessed = true;
+  return c;
+}
+
+async function runImport() {
+  const yaEstan = new Set(B.beers.map(b => b.source).filter(Boolean));
+  const nuevas = notasElegidas().filter(n => !yaEstan.has('keep:' + n.archivo));
+  if (!nuevas.length) { status('No hay nada nuevo que importar', true); return; }
+  if (!await ensurePermission(beerDir)) { status('Sin permiso de escritura en la carpeta', true); return; }
+
+  let fotosOk = 0, fotosNo = 0;
+  for (let i = 0; i < nuevas.length; i++) {
+    const n = nuevas[i];
+    const c = cervezaDeNota(n, i);
+    status(`Importando ${i + 1} de ${nuevas.length}: ${c.name}`);
+    const copiadas = [];
+    for (let f = 0; f < n.fotos.length; f++) {
+      const handle = impArchivos.get(claveArchivo(n.fotos[f]));
+      if (!handle) { fotosNo++; continue; }
+      try {
+        const blob = await compressImage(await handle.getFile(), 1400, 1400, 0.78);
+        const nombre = `cerveza_${c.id}_${f}.jpg`;
+        await writeFile(nombre, blob, beerDir);
+        copiadas.push(nombre);
+        fotosOk++;
+      } catch (_) { fotosNo++; }
+    }
+    c.photos = copiadas;
+    B.beers.push(c);
+    // se guarda cada 20 para no perderlo todo si algo falla a mitad
+    if (i % 20 === 19) await saveBeers();
+  }
+  const ok = await saveBeers();
+  impNotas = []; impArchivos = null; impSel = null;
+  await showBeers();
+  if (ok) status(`✓ ${nuevas.length} cervezas importadas${fotosOk ? `, ${fotosOk} fotos copiadas` : ''}${fotosNo ? `. ${fotosNo} fotos no se pudieron leer` : ''}`);
 }
 
 /* ─── TEMA ─── */

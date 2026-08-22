@@ -29,9 +29,12 @@ Carpeta raíz elegida por el usuario
 │   └─ *.jpg              fotos del diario y pruebas de capturas
 ├─ amsterdam-2027/
 │   └─ bitacora.json
-└─ Momentos/
-    ├─ momentos.json      { people: [], moments: [] }
-    └─ momento_*.jpg
+├─ Momentos/
+│   ├─ momentos.json      { people: [], moments: [] }
+│   └─ momento_*.jpg
+└─ Cervezas/
+    ├─ cervezas.json      { schemaVersion, beers: [] }
+    └─ cerveza_*.jpg
 ```
 
 Un viaje es cualquier subcarpeta con `bitacora.json`. El esquema completo está en `FORMATO-viajes.md`;
@@ -63,6 +66,13 @@ Bloques principales, en orden dentro del `<script>`:
 - **Render del viaje** — `renderTrip()`, `dayCard()`, `scoreboard()`.
 - **Momentos del día** — `renderDayMoments()`, `saveDayMoment()`: lo que pasó fuera del plan, con ubicación
   opcional del GPS o marcada en el mapa. Nunca escribe en `route`: el itinerario preparado es de solo lectura.
+- **Cervezas** — `showBeers()`, `renderBeerList()`, formulario y `importKeep()`: las cervezas probadas por el
+  mundo, en `Cervezas/cervezas.json`. Cada una lleva `name`, `brewery`, `style`, `place`, `country`, `datetime`,
+  `rating` (0–5), `notes` y `photos`. El importador lee la carpeta `Keep` de un export de Google Takeout: una
+  nota por cerveza, con sus fotos sueltas al lado. `estiloDesdeTitulo()` saca el estilo del título y nunca del
+  texto (está lleno de «parecido a una IPA»); `puntuacionDesdeTexto()` deduce la nota del adjetivo y la marca
+  con `ratingGuessed` para que se vea que es una propuesta. `source` (`keep:<archivo>`) evita duplicar al
+  reimportar.
 - **Viajes de vacaciones** — `esAlbum()`, `renderAlbum()`, `saveEntry()`, `createAlbumTrip()`: viajes sin
   itinerario (`trip.kind: "album"`), hechos de tarjetas en `entries`. La app crea su carpeta y su JSON.
   `repinta()` decide entre `renderTrip()` y `renderAlbum()`; todo lo demás (fotos, caché, ZIP, PDF) es común.

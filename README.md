@@ -55,6 +55,18 @@ Los nombres se acumulan solos, así que a partir del segundo momento se eligen d
 Viven en `Momentos/momentos.json` dentro de tu carpeta raíz, con sus fotos al lado. La app crea esa carpeta
 la primera vez sin que tengas que hacer nada.
 
+## Cervezas
+
+Una tercera pestaña para las cervezas que se prueban por ahí: nombre, cervecera, estilo, sitio, país, fecha,
+puntuación de 0 a 5, notas y fotos. La lista tiene buscador y una cuenta de cervezas, países y nota media.
+
+Viven en `Cervezas/cervezas.json` dentro de tu carpeta raíz, con sus fotos al lado.
+
+Si ya tenías las cervezas apuntadas en **Google Keep**, el botón 📥 las importa: exporta Keep desde
+[Google Takeout](https://takeout.google.com), descomprime el zip y elige la carpeta `Keep`. La app lee las
+notas, copia sus fotos a `Cervezas/` y te deja elegir qué etiquetas traer. El estilo y la puntuación se
+proponen a partir del texto y quedan marcados como «sin confirmar» hasta que los edites.
+
 ## Formato de los viajes
 
 `FORMATO-viajes.md` es la **única** descripción del formato: esquema del `bitacora.json`, estados, temas, reglas

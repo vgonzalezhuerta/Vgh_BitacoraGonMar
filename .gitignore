@@ -2,5 +2,6 @@
 # y git guarda el historial para siempre, así que borrar un archivo después no lo quita.
 bitacora.json
 momentos.json
+cervezas.json
 *.jpg
 *.jpeg
