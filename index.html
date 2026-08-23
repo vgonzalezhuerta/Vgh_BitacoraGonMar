@@ -1760,6 +1760,11 @@ async function runImport() {
   if (!nuevas.length) { status('No hay nada nuevo que importar', true); return; }
   if (!await ensurePermission(beerDir)) { status('Sin permiso de escritura en la carpeta', true); return; }
 
+  // Copiar cientos de fotos lleva minutos: si se apaga la pantalla, Chrome
+  // congela la pestaña y la importación se queda a medias.
+  let despierta = null;
+  try { despierta = await navigator.wakeLock.request('screen'); } catch (_) {}
+
   let fotosOk = 0, fotosNo = 0;
   for (let i = 0; i < nuevas.length; i++) {
     const n = nuevas[i];
@@ -1780,9 +1785,11 @@ async function runImport() {
     }
     c.photos = copiadas;
     B.beers.push(c);
-    // se guarda cada 20 para no perderlo todo si algo falla a mitad
-    if (i % 20 === 19) await saveBeers();
+    // se guarda cada diez para no perder el trabajo si algo falla a mitad:
+    // volver a importar sigue por donde se quedó, porque cada ficha recuerda su nota
+    if (i % 10 === 9) await saveBeers();
   }
+  if (despierta) { try { await despierta.release(); } catch (_) {} }
   const conSitio = impUbic ? aplicaUbicaciones(impUbic, true).tocadas : 0;
   const ok = await saveBeers();
   impNotas = []; impArchivos = null; impSel = null; impUbic = null;
