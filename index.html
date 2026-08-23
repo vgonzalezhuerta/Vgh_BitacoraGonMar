@@ -1557,6 +1557,20 @@ let impArchivos = null;  // clave de archivo -> handle de la imagen
 let impSel = null;       // etiquetas marcadas para importar
 let impNombre = '';      // nombre de la carpeta elegida
 let impUbic = null;      // ubicaciones.json encontrado junto a las notas
+let keepVistos = 0;      // archivos recorridos, solo para ir dando señales de vida
+
+// Drive en Android sirve los archivos de uno en uno; de dos en dos va bien y con
+// más caducan, igual que al cargar las fotos de un viaje.
+async function enLotes(lista, n, fn) {
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, lista.length) }, async () => {
+    while (i < lista.length) { const j = i++; await fn(lista[j], j); }
+  }));
+}
+
+// Un archivo que Drive no llega a servir dejaba la importación colgada para siempre
+const conTiempo = (promesa, ms) => Promise.race([promesa,
+  new Promise((_, rechaza) => setTimeout(() => rechaza(new Error('tardó demasiado')), ms))]);
 
 async function importKeep() {
   if (!('showDirectoryPicker' in window)) {
@@ -1564,6 +1578,7 @@ async function importKeep() {
   }
   if (pickerBusy) return;
   pickerBusy = true;
+  keepVistos = 0;
   let dir = null;
   try { dir = await window.showDirectoryPicker(); }
   catch (e) { if (e.name !== 'AbortError') status('No se pudo abrir la carpeta: ' + e.message, true); }
@@ -1572,7 +1587,7 @@ async function importKeep() {
 
   try {
     await loadBeers();
-    status('Leyendo las notas…');
+    status('Mirando la carpeta…');
     impNombre = dir.name;
     impNotas = [];
     impArchivos = new Map();
@@ -1582,17 +1597,21 @@ async function importKeep() {
     if (!jsons.length) {
       status('En esa carpeta no hay notas de Keep. Elige la carpeta "Keep" del export de Takeout.', true); return;
     }
-    for (const entry of jsons) {
+    const leidas = new Array(jsons.length);
+    let hechas = 0, fallos = 0;
+    await enLotes(jsons, 2, async (entry, i) => {
       try {
-        const j = JSON.parse(await (await entry.getFile()).text());
-        if (j.isTrashed) continue;
-        const nota = notaDeKeep(j, entry.name);
-        if (nota) impNotas.push(nota);
-      } catch (_) { /* un .json que no es una nota: se ignora */ }
-    }
+        const j = JSON.parse(await conTiempo(entry.getFile().then(f => f.text()), 20000));
+        if (!j.isTrashed) leidas[i] = notaDeKeep(j, entry.name);
+      } catch (_) { fallos++; /* no es una nota, o Drive no la sirvió */ }
+      hechas++;
+      if (hechas % 5 === 0 || hechas === jsons.length) status(`Leyendo notas… ${hechas} de ${jsons.length}`);
+    });
+    impNotas = leidas.filter(Boolean);
     if (!impNotas.length) {
       status('No he encontrado ninguna nota aprovechable en esa carpeta.', true); return;
     }
+    if (fallos) status(`${fallos} archivo${fallos === 1 ? '' : 's'} no se pudieron leer y se han saltado`, true);
     const todas = etiquetasDeNotas().map(e => e.nombre);
     const suenan = todas.filter(e => /cerve|beer|birra/i.test(e));
     impSel = new Set(suenan.length ? suenan : (todas.length === 1 ? todas : []));
@@ -1606,9 +1625,13 @@ async function importKeep() {
 async function recorreKeep(dir, jsons, prof) {
   for await (const entry of dir.values()) {
     if (entry.kind === 'directory') {
-      if (prof < 3) await recorreKeep(entry, jsons, prof + 1);
+      if (prof < 3 && entry.name !== 'Cervezas' && entry.name !== 'Momentos') {
+        await recorreKeep(entry, jsons, prof + 1);
+      }
       continue;
     }
+    // la carpeta puede tener miles de fotos: sin esto parece que se ha colgado
+    if (++keepVistos % 200 === 0) status(`Mirando la carpeta… ${keepVistos} archivos, ${jsons.length} notas`);
     if (/\.json$/i.test(entry.name)) {
       if (entry.name === 'ubicaciones.json') {
         try { impUbic = JSON.parse(await (await entry.getFile()).text()); }
@@ -1741,13 +1764,14 @@ async function runImport() {
   for (let i = 0; i < nuevas.length; i++) {
     const n = nuevas[i];
     const c = cervezaDeNota(n, i);
-    status(`Importando ${i + 1} de ${nuevas.length}: ${c.name}`);
+    status(`Importando ${i + 1} de ${nuevas.length}: ${c.name}${n.fotos.length ? ` (${n.fotos.length} fotos)` : ''}`);
     const copiadas = [];
     for (let f = 0; f < n.fotos.length; f++) {
       const handle = impArchivos.get(claveArchivo(n.fotos[f]));
       if (!handle) { fotosNo++; continue; }
       try {
-        const blob = await compressImage(await handle.getFile(), 1400, 1400, 0.78);
+        const original = await conTiempo(handle.getFile(), 30000);
+        const blob = await compressImage(original, 1400, 1400, 0.78);
         const nombre = `cerveza_${c.id}_${f}.jpg`;
         await writeFile(nombre, blob, beerDir);
         copiadas.push(nombre);
