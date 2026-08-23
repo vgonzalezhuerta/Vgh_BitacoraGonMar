@@ -305,9 +305,9 @@ textarea:focus{outline:none;border-color:var(--accent)}
 .mom-card{background:var(--paper);border:3px solid var(--line);border-radius:12px;padding:.9rem;box-shadow:0 4px 16px rgba(0,0,0,.4)}
 .mom-date{font-family:var(--display);font-size:1.15rem;color:var(--panel);line-height:1.2}
 .mom-text{font-size:.92rem;margin:.4rem 0;white-space:pre-wrap}
-.mom-photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:.4rem;margin:.5rem 0}
-.mom-thumb{aspect-ratio:1;border-radius:8px;overflow:hidden;border:2px solid #d9c99f;background:#fff8ea}
-.mom-thumb img{width:100%;height:100%;object-fit:cover;cursor:pointer}
+.mom-photos,.beer-photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:.4rem;margin:.5rem 0}
+.mom-thumb,.beer-thumb{aspect-ratio:1;border-radius:8px;overflow:hidden;border:2px solid #d9c99f;background:#fff8ea}
+.mom-thumb img,.beer-thumb img{width:100%;height:100%;object-fit:cover;cursor:pointer}
 .mom-actions{display:flex;gap:.4rem;justify-content:flex-end;margin-top:.5rem}
 .mom-actions .tb-btn{background:#e6dbc0;color:var(--panel);border-color:#c9b98f}
 .chips{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.3rem}
@@ -331,11 +331,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 .beer-tools input{flex:1;min-width:150px;border:2px solid #d9c99f;border-radius:8px;padding:.45rem;background:#fffdf7;font-size:.9rem}
 .beer-list{display:grid;gap:.9rem}
 .beer-card{background:var(--paper);border:3px solid var(--line);border-radius:12px;padding:.9rem;
-  box-shadow:0 4px 16px rgba(0,0,0,.4);display:flex;gap:.8rem;align-items:flex-start}
-.beer-photo{flex:0 0 92px;width:92px;aspect-ratio:1;border-radius:8px;overflow:hidden;border:2px solid #d9c99f;
-  background:#fff8ea;display:flex;align-items:center;justify-content:center;font-size:1.9rem}
-.beer-photo img{width:100%;height:100%;object-fit:cover;cursor:pointer}
-.beer-body{flex:1;min-width:0}
+  box-shadow:0 4px 16px rgba(0,0,0,.4)}
 .beer-name{font-family:var(--display);font-size:1.2rem;color:var(--panel);line-height:1.15}
 .beer-meta{font-size:.78rem;color:#7a6a52;margin-top:.15rem;display:flex;flex-wrap:wrap;gap:.15rem .6rem}
 .beer-pin{cursor:pointer;text-decoration:underline dotted}
@@ -353,7 +349,6 @@ textarea:focus{outline:none;border-color:var(--accent)}
 .imp-chips button{background:#e6dbc0;color:var(--panel);border:2px solid #c9b98f;border-radius:14px;
   padding:.2rem .7rem;font-size:.8rem}
 .imp-chips button.on{background:var(--panel);color:var(--accent2);border-color:var(--panel)}
-@media(max-width:520px){.beer-photo{flex-basis:74px;width:74px}}
 
 /* ───── LIGHTBOX ───── */
 .lightbox{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:1rem}
@@ -492,6 +487,34 @@ async function ensurePermission(handle, mode = 'readwrite') {
   } catch (_) { return false; }
 }
 
+/* ─── EL BOTÓN ATRÁS DEL MÓVIL ─── */
+// La app es una sola página sin historial, así que atrás cerraba la aplicación.
+// No se guarda un historial completo: se recuerda la pantalla actual y atrás sube
+// un escalón (formulario → su lista → viajes). Desde viajes ya sí cierra.
+let pantallaActual = { v: 'viajes' };
+const PADRE = { 'cerveza-form': 'cervezas', 'importar': 'cervezas', 'momento-form': 'momentos',
+  'cervezas': 'viajes', 'momentos': 'viajes', 'viaje': 'viajes' };
+
+function marcaPantalla(v) {
+  pantallaActual = v;
+  // basta con una entrada de más mientras no estemos en la raíz: es la que recoge el atrás
+  if (v.v !== 'viajes' && !(history.state && history.state.bit)) history.pushState({ bit: true }, '');
+}
+
+window.addEventListener('popstate', () => {
+  const caja = el('lightbox');
+  if (caja && caja.classList.contains('open')) {   // con una foto ampliada, atrás la cierra
+    closeLightbox();
+    history.pushState({ bit: true }, '');
+    return;
+  }
+  const padre = PADRE[pantallaActual.v];
+  if (!padre) return;                              // en la raíz: que atrás cierre la app
+  if (padre === 'cervezas') showBeers();
+  else if (padre === 'momentos') showMoments();
+  else showLibrary();
+});
+
 /* ─── CARPETA RAÍZ Y ESCANEO DE VIAJES ─── */
 let pickerBusy = false;
 async function pickRoot() {
@@ -629,6 +652,7 @@ function tripCard(t, i) {
 
 async function showLibrary() {
   tripDir = null; D = null;
+  marcaPantalla({ v: 'viajes' });
   applyTheme('crucero');
   el('btn-pdf').style.display = el('btn-zip').style.display = el('btn-recuerdo').style.display = 'none';
   el('btn-library').style.display = 'none';
@@ -748,6 +772,7 @@ async function showMoments() {
   el('score-bar').style.display = 'none';
 
   if (!rootHandle) { showLibrary(); return; }
+  marcaPantalla({ v: 'momentos' });
   await loadMoments();
 
   const lista = M.moments.slice().sort((a, b) => (b.datetime || '').localeCompare(a.datetime || ''));
@@ -822,6 +847,7 @@ function editMoment(id) {
 }
 
 function renderMomentForm(esNuevo) {
+  marcaPantalla({ v: 'momento-form' });
   const d = momDraft;
   const opciones = M.people.filter(p => !d.people.includes(p));
   el('app').innerHTML = `<div class="library">
@@ -1015,21 +1041,21 @@ function beerCard(b) {
   const sitio = b.lat != null
     ? `<span class="beer-pin" onclick="goToBeerMap('${esc(b.id)}')" title="Verla en el mapa">📍 ${esc(lugar || 'marcada en el mapa')}</span>`
     : (lugar ? `<span>${esc(lugar)}</span>` : '');
-  const meta = sitio + [b.style, fmtFecha(b.datetime), fotos.length > 1 ? fotos.length + ' fotos' : '']
+  const meta = sitio + [b.style, fmtFecha(b.datetime)]
     .filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('');
+  const rejilla = fotos.map(f => `<div class="beer-thumb" id="bt-${esc(b.id)}-${esc(f)}"></div>`).join('');
   return `<div class="beer-card" id="card-${esc(b.id)}">
-    <div class="beer-photo" id="bt-${esc(b.id)}">${fotos.length ? '' : '🍺'}</div>
-    <div class="beer-body">
       <div class="beer-name">${esc(b.name)}</div>
       ${b.brewery ? `<div class="beer-meta"><span>${esc(b.brewery)}</span></div>` : ''}
       ${meta ? `<div class="beer-meta">${meta}</div>` : ''}
       ${estrellas(b)}
       ${b.notes ? `<div class="beer-notes">${esc(b.notes)}</div>` : ''}
+      ${rejilla ? `<div class="beer-photos">${rejilla}</div>` : ''}
       <div class="beer-actions">
         <button class="tb-btn" onclick="editBeer('${esc(b.id)}')">✎ Editar</button>
         <button class="tb-btn" onclick="deleteBeer('${esc(b.id)}')">🗑 Borrar</button>
       </div>
-    </div></div>`;
+    </div>`;
 }
 
 async function showBeers() {
@@ -1040,6 +1066,7 @@ async function showBeers() {
   el('score-bar').style.display = 'none';
 
   if (!rootHandle) { showLibrary(); return; }
+  marcaPantalla({ v: 'cervezas' });
   try { await loadBeers(); }
   catch (e) { status('No se pudo abrir la carpeta Cervezas: ' + e.message, true); return; }
 
@@ -1103,24 +1130,30 @@ async function renderBeerList() {
   beerVisibles = lista;
   refreshBeerMarkers();
 
-  for (const b of lista) {
-    const foto = (b.photos || [])[0];
-    if (!foto) continue;
-    const box = el('bt-' + b.id);
+  for (const b of lista) for (const foto of (b.photos || [])) {
+    const box = el(`bt-${b.id}-${foto}`);
     if (!box) continue;
-    let src = beerUrls[foto] || await cacheGet(foto, 'Cervezas');
-    if (!src) {
-      try {
-        const file = await (await beerDir.getFileHandle(foto)).getFile();
-        const max = thumbSize(false);
-        const thumb = await compressImage(file, max, max, thumbQuality());
-        src = URL.createObjectURL(thumb);
-        await cacheSet(foto, thumb, 'Cervezas');
-      } catch (_) { continue; }
-    }
-    beerUrls[foto] = src;
+    const src = await miniaturaCerveza(foto);
+    if (!src) continue;
     box.innerHTML = `<img src="${src}" alt="" loading="lazy" onclick="openBeerPhoto('${esc(foto)}')">`;
   }
+}
+
+// Miniatura de una foto de cerveza: de memoria, de la caché o leyéndola de la carpeta
+async function miniaturaCerveza(foto) {
+  if (beerUrls[foto]) return beerUrls[foto];
+  let src = await cacheGet(foto, 'Cervezas');
+  if (!src) {
+    try {
+      const file = await (await beerDir.getFileHandle(foto)).getFile();
+      const max = thumbSize(false);
+      const thumb = await compressImage(file, max, max, thumbQuality());
+      src = URL.createObjectURL(thumb);
+      await cacheSet(foto, thumb, 'Cervezas');
+    } catch (_) { return null; }
+  }
+  beerUrls[foto] = src;
+  return src;
 }
 
 async function openBeerPhoto(file) {
@@ -1149,6 +1182,7 @@ function editBeer(id) {
 }
 
 function renderBeerForm() {
+  marcaPantalla({ v: 'cerveza-form' });
   const d = beerDraft;
   const esNuevo = !B.beers.some(x => x.id === d.id);
   const sugerencias = arr => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
@@ -1236,13 +1270,22 @@ function setBeerRating(n) {
   if (pista) pista.textContent = v ? 'Toca la misma estrella para quitarla' : 'Sin puntuar';
 }
 
-function renderBeerDraftPhotos() {
+async function renderBeerDraftPhotos() {
   const grid = el('beer-fotos');
   if (!grid) return;
-  grid.innerHTML = (beerDraft.photos || []).map(f =>
-    `<div class="photo-thumb">${beerUrls[f] ? `<img src="${beerUrls[f]}" alt="">` : '<div class="ph"></div>'}
+  const fotos = beerDraft.photos || [];
+  grid.innerHTML = fotos.map(f =>
+    `<div class="photo-thumb" id="bf-${esc(f)}">${beerUrls[f] ? `<img src="${beerUrls[f]}" alt="">` : '<div class="ph"></div>'}
       <button class="del-btn" onclick="removeBeerDraftPhoto('${esc(f)}')">✕</button></div>`).join('')
     + `<button class="add-photo" onclick="addBeerPhotos()"><span style="font-size:1.4rem">＋</span>Añadir</button>`;
+  for (const f of fotos) {
+    if (beerUrls[f]) continue;
+    const src = await miniaturaCerveza(f);
+    const caja = el('bf-' + f);
+    if (!src || !caja) continue;
+    const hueco = caja.querySelector('.ph');
+    if (hueco) hueco.outerHTML = `<img src="${src}" alt="">`;
+  }
 }
 
 function addBeerPhotos() {
@@ -1605,6 +1648,7 @@ function toggleImpEtiqueta(i) {
 }
 
 function renderImportPanel() {
+  marcaPantalla({ v: 'importar' });
   const etiquetas = etiquetasDeNotas();
   const elegidas = notasElegidas();
   const yaEstan = new Set(B.beers.map(b => b.source).filter(Boolean));
@@ -1727,6 +1771,7 @@ async function openTrip(i) {
 
     urls = {}; fullUrls = {}; pending = [];
     el('btn-retry').style.display = 'none';
+    marcaPantalla({ v: 'viaje' });
     repinta();
     if (window.scrollTo) window.scrollTo(0, 0);
     loadMedia().catch(e => { console.error(e); status('Las imágenes no se han podido cargar: ' + (e.message || e), true); });

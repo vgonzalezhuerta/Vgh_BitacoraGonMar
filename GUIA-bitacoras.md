@@ -76,6 +76,9 @@ propia, y recuerda la carpeta elegida entre sesiones.
 La primera vez que la abras con internet se guarda todo lo que necesita; a partir de ahí funciona sin conexión.
 Las tipografías van en el propio repositorio (`lib/fuentes/`), así que la app se ve igual con o sin internet.
 
+El botón atrás del móvil vuelve a la pantalla anterior: de un formulario a su lista, de una lista a los viajes,
+y desde los viajes ya sí cierra la app. Con una foto ampliada, atrás la cierra sin moverte de sitio.
+
 En el móvil funciona igual, y de hecho es el uso principal: Chrome en Android abre la carpeta a través del
 proveedor de archivos del sistema, así que vale una carpeta de Google Drive sincronizada. En iPhone y iPad no,
 porque Safari no trae la API que lee carpetas.

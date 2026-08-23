@@ -59,6 +59,11 @@ Bloques principales, en orden dentro del `<script>`:
 - **Temas** — `THEMES` y `HERO_ART`: paletas, tipografías e ilustración SVG de cabecera por tipo de viaje
   (`crucero`, `velero`, `montana`, `playa`, `ciudad`, `carretera`). `applyTheme()` los aplica a variables CSS.
 - **Almacenamiento de handles** — `db()`, `rememberRoot()`, `recallRoot()`.
+- **Botón atrás** — `marcaPantalla()`, `PADRE` y el `popstate`. La app es una sola página sin historial, así
+  que en Android el botón atrás la cerraba. No se guarda un historial completo: se recuerda la pantalla actual
+  y atrás sube un escalón según `PADRE` (formulario → su lista → viajes); desde viajes ya sí cierra. Mientras no
+  se está en la raíz se mantiene **una** entrada de historial, que es la que recoge el toque. Toda pantalla
+  nueva tiene que llamar a `marcaPantalla()` y entrar en `PADRE`, o atrás se saltará un escalón.
 - **Escaneo** — `pickRoot()`, `scanTrips()`. `pickerBusy` impide dos selectores a la vez (Chrome falla).
 - **Biblioteca y momentos** — `showLibrary()`, `showMoments()`, formulario de momentos.
 - **Caché de miniaturas** — `cacheInit()` detecta si hay IndexedDB (solo por `https`) o cae a
@@ -68,7 +73,8 @@ Bloques principales, en orden dentro del `<script>`:
   opcional del GPS o marcada en el mapa. Nunca escribe en `route`: el itinerario preparado es de solo lectura.
 - **Cervezas** — `showBeers()`, `renderBeerList()`, formulario y `importKeep()`: las cervezas probadas por el
   mundo, en `Cervezas/cervezas.json`. Cada una lleva `name`, `brewery`, `style`, `place`, `city`, `country`,
-  `datetime`, `rating` (0–5), `notes`, `photos` y, opcional, `lat`/`lng`. El mapa de la lista (`initBeerMap()`)
+  `datetime`, `rating` (0–5), `notes`, `photos` (todas se pintan en la ficha: enseñar solo la primera dejaba
+  las demás inalcanzables) y, opcional, `lat`/`lng`. El mapa de la lista (`initBeerMap()`)
   sigue al buscador; el del formulario (`initBeerFormMap()`) es de una sola cerveza y cualquier toque mueve su
   marcador. Los dos van con `zoomAnimation: false`: al cambiar de pantalla se destruye el mapa y una animación
   de zoom en vuelo revienta al terminar sobre un contenedor que ya no existe. `aplicaUbicaciones()` vuelca un
