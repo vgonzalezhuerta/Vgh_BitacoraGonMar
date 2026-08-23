@@ -32,6 +32,10 @@ Viajes/                          ← carpeta raíz (la eliges una vez en la app)
 La app recorre las subcarpetas de la raíz y muestra como viaje cualquiera que contenga un `bitacora.json`. No
 hay nada codificado dentro del HTML: cambiar un texto, una ruta o un objetivo se hace editando el JSON.
 
+Al abrirla, la biblioteca sale al momento con los viajes de la última visita y la carpeta se vuelve a leer por
+detrás; si has añadido o cambiado algo, las tarjetas se actualizan solas en cuanto lo encuentra. El contenido de
+cada viaje no se lee hasta que lo abres, así que tener muchos viajes no hace más lento el arranque.
+
 ## Viajes pendientes, en curso y hechos
 
 La biblioteca agrupa los viajes en tres secciones: **En curso** arriba, **Pendientes** en medio (lo más próximo

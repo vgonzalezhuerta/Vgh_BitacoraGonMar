@@ -443,6 +443,7 @@ let tripHandles = [];       // [{handle, meta}]
 let tripDir = null;         // carpeta del viaje abierto
 let D = null;               // JSON del viaje abierto
 let urls = {};              // clave -> objectURL de la miniatura
+let portadaUrls = {};       // carpeta -> objectURL de la portada de su tarjeta
 let fullUrls = {};          // clave -> objectURL a tamaño completo (bajo demanda)
 let pending = [];           // imágenes que no se pudieron leer
 let saveTimer = null;
@@ -542,7 +543,9 @@ async function pickRoot() {
     await rememberRoot(rootHandle);
     el('btn-root').textContent = '📁 ' + rootHandle.name;
     el('btn-root').classList.add('connected');
-    await scanTrips(); showLibrary();
+    tripHandles = [];
+    showLibrary();
+    await scanTrips(showLibrary);
   } catch (e) {
     if (e.name !== 'AbortError') status('No se pudo abrir la carpeta: ' + e.message, true);
   } finally { pickerBusy = false; }
@@ -590,75 +593,113 @@ function cuantoFalta(start) {
   return `en ${años} año${años === 1 ? '' : 's'}`;
 }
 
-async function scanTrips() {
-  tripHandles = [];
-  for await (const entry of rootHandle.values()) {
-    if (entry.kind !== 'directory') continue;
-    try {
-      const fh = await entry.getFileHandle('bitacora.json');
-      const data = JSON.parse(await (await fh.getFile()).text());
-      tripHandles.push({ handle: entry, data, folder: entry.name, status: tripStatus(data) });
-    } catch (_) { /* subcarpeta sin bitácora: se ignora */ }
+// Lo que la biblioteca necesita de un viaje. Se guarda aparte del JSON entero
+// para poder pintar las tarjetas sin haber leído todavía ningún bitacora.json.
+function resumenViaje(data, folder) {
+  const tr = data.trip || {}, days = data.days || [];
+  const r = { folder, title: tr.title || folder, subtitle: tr.subtitle || '', theme: tr.theme || '',
+    startDate: tr.startDate || '', cover: tr.coverImage || '', album: esAlbum(data),
+    dias: days.length, vis: (data.visited || []).filter(Boolean).length,
+    objetivos: 0, caught: 0, pts: 0, max: 0, tarjetas: 0, fotos: 0 };
+  if (r.album) {
+    const es = data.entries || [];
+    r.tarjetas = es.length;
+    r.fotos = es.reduce((n, e) => n + (e.photos || []).length, 0);
+  } else {
+    days.forEach((d, di) => (d.hunt?.items || []).forEach((it, ii) => {
+      r.max += it.pts || 0; r.objetivos++;
+      if ((data.caught || {})[di + '-' + ii]) { r.pts += it.pts || 0; r.caught++; }
+    }));
   }
-  tripHandles.sort((a, b) => {
-    if (ORDEN[a.status] !== ORDEN[b.status]) return ORDEN[a.status] - ORDEN[b.status];
-    const da = a.data.trip?.startDate || '', db = b.data.trip?.startDate || '';
-    if (a.status === 'hecho') return db.localeCompare(da);   // los últimos viajes, arriba
-    if (!da !== !db) return da ? -1 : 1;                     // las ideas sin fecha, al final
-    return da.localeCompare(db);                             // lo más próximo, arriba
-  });
+  return r;
+}
+
+const claveIndice = () => 'indice:' + (rootHandle ? rootHandle.name : '');
+const ordenaViajes = lista => lista.sort((a, b) => {
+  if (ORDEN[a.status] !== ORDEN[b.status]) return ORDEN[a.status] - ORDEN[b.status];
+  const da = a.resumen.startDate, db = b.resumen.startDate;
+  if (a.status === 'hecho') return db.localeCompare(da);
+  if (!da !== !db) return da ? -1 : 1;
+  return da.localeCompare(db);
+});
+
+// El índice de la última visita: pinta la biblioteca al instante mientras se
+// vuelve a leer la carpeta por detrás. Sin esto, cada viaje nuevo es más espera
+// antes de ver nada.
+async function indiceGuardado() {
+  try {
+    const guardado = await idbGet('h', claveIndice());
+    if (!Array.isArray(guardado) || !guardado.length) return false;
+    tripHandles = guardado.map(r => ({ handle: null, data: null, folder: r.folder, resumen: r, status: r.status }));
+    ordenaViajes(tripHandles);
+    return true;
+  } catch (_) { return false; }
+}
+
+let escaneando = false;
+
+async function scanTrips(alPintar) {
+  escaneando = true;
+  const carpetas = [];
+  try {
+    for await (const entry of rootHandle.values()) {
+      if (entry.kind === 'directory' && entry.name !== 'Momentos' && entry.name !== 'Cervezas') carpetas.push(entry);
+    }
+    const hallados = [];
+    await enLotes(carpetas, 2, async entry => {
+      try {
+        const fh = await entry.getFileHandle('bitacora.json');
+        const data = JSON.parse(await (await fh.getFile()).text());
+        const resumen = resumenViaje(data, entry.name);
+        hallados.push({ handle: entry, data, folder: entry.name, resumen, status: tripStatus(data) });
+        tripHandles = ordenaViajes(hallados.slice());
+        if (alPintar) alPintar();
+      } catch (_) { /* subcarpeta sin bitácora: se ignora */ }
+    });
+    tripHandles = ordenaViajes(hallados);
+    idbSet('h', claveIndice(), tripHandles.map(t => ({ ...t.resumen, status: t.status }))).catch(() => {});
+  } finally { escaneando = false; }
+  if (alPintar) alPintar();
 }
 
 /* ─── PANTALLA: BIBLIOTECA ─── */
 function tripCard(t, i) {
-  const tr = t.data.trip || {}, th = THEMES[tr.theme] || THEMES.crucero;
-  const days = t.data.days || [], est = t.status;
+  const r = t.resumen, th = THEMES[r.theme] || THEMES.crucero, est = t.status;
+  const falta = est === 'pendiente' ? cuantoFalta(r.startDate) : '';
+  const pill = est === 'hecho' ? '' : `<span class="estado ${est}">${est === 'curso' ? 'en curso' : 'pendiente'}</span>`;
+  const portada = `<div class="trip-cover" id="cover-${i}" style="background:${th.vars['--panel']}"
+      ${r.cover ? `data-cover="${esc(r.cover)}" data-carpeta="${esc(t.folder)}"` : ''}>
+      <span>${th.icon}</span>${pill}<span class="badge">${esc(r.album ? 'vacaciones' : (r.theme || 'viaje'))}</span></div>`;
 
   // un viaje de vacaciones no tiene itinerario que medir: cuenta lo que ya se ha vivido
-  if (esAlbum(t.data)) {
-    const tarjetas = (t.data.entries || []).length;
-    const fotos = (t.data.entries || []).reduce((n, e) => n + (e.photos || []).length, 0);
-    const falta = est === 'pendiente' ? cuantoFalta(tr.startDate || '') : '';
-    const pill = est === 'hecho' ? '' : `<span class="estado ${est}">${est === 'curso' ? 'en curso' : 'pendiente'}</span>`;
-    return `<button class="trip-card ${est}" onclick="openTrip(${i})">
-      <div class="trip-cover" id="cover-${i}" style="background:${th.vars['--panel']}">
-        <span>${th.icon}</span>${pill}<span class="badge">vacaciones</span></div>
+  if (r.album) {
+    return `<button class="trip-card ${est}" onclick="abreViaje('${esc(t.folder).replace(/'/g, '&#39;')}')">
+      ${portada}
       <div class="trip-body">
-        <div class="trip-name">${esc(tr.title || t.folder)}</div>
-        <div class="trip-dates">${esc(tr.subtitle || '')}</div>
+        <div class="trip-name">${esc(r.title)}</div>
+        <div class="trip-dates">${esc(r.subtitle)}</div>
         <div class="trip-meta">
-          <span>📸 ${tarjetas} tarjeta${tarjetas === 1 ? '' : 's'}</span>
-          <span>🖼 ${fotos} foto${fotos === 1 ? '' : 's'}</span>
+          <span>📸 ${r.tarjetas} tarjeta${r.tarjetas === 1 ? '' : 's'}</span>
+          <span>🖼 ${r.fotos} foto${r.fotos === 1 ? '' : 's'}</span>
           ${falta ? `<span>⏳ ${falta}</span>` : ''}</div>
       </div></button>`;
   }
 
-  const vis = (t.data.visited || []).filter(Boolean).length;
-  const pct = days.length ? Math.round(vis / days.length * 100) : 0;
-  let pts = 0, caught = 0, max = 0, objetivos = 0;
-  days.forEach((d, di) => (d.hunt?.items || []).forEach((it, ii) => {
-    max += it.pts || 0; objetivos++;
-    if ((t.data.caught || {})[di + '-' + ii]) { pts += it.pts || 0; caught++; }
-  }));
-
+  const pct = r.dias ? Math.round(r.vis / r.dias * 100) : 0;
   // un viaje pendiente no tiene progreso que enseñar: se muestra lo que trae preparado
-  const falta = est === 'pendiente' ? cuantoFalta(tr.startDate || '') : '';
   const meta = est === 'pendiente'
-    ? `<span>📅 ${days.length} día${days.length === 1 ? '' : 's'}</span>
-       <span>🗿 ${objetivos} objetivo${objetivos === 1 ? '' : 's'}</span>
+    ? `<span>📅 ${r.dias} día${r.dias === 1 ? '' : 's'}</span>
+       <span>🗿 ${r.objetivos} objetivo${r.objetivos === 1 ? '' : 's'}</span>
        ${falta ? `<span>⏳ ${falta}</span>` : ''}`
-    : `<span>📍 ${vis}/${days.length}</span>
-       <span>${th.icon} ${caught} captura${caught === 1 ? '' : 's'}</span>
-       <span>⭐ ${pts}${max ? '/' + max : ''}</span>`;
-  const pill = est === 'hecho' ? ''
-    : `<span class="estado ${est}">${est === 'curso' ? 'en curso' : 'pendiente'}</span>`;
+    : `<span>📍 ${r.vis}/${r.dias}</span>
+       <span>${th.icon} ${r.caught} captura${r.caught === 1 ? '' : 's'}</span>
+       <span>⭐ ${r.pts}${r.max ? '/' + r.max : ''}</span>`;
 
-  return `<button class="trip-card ${est}" onclick="openTrip(${i})">
-    <div class="trip-cover" id="cover-${i}" style="background:${th.vars['--panel']}">
-      <span>${th.icon}</span>${pill}<span class="badge">${esc(tr.theme || 'viaje')}</span></div>
+  return `<button class="trip-card ${est}" onclick="abreViaje('${esc(t.folder).replace(/'/g, '&#39;')}')">
+    ${portada}
     <div class="trip-body">
-      <div class="trip-name">${esc(tr.title || t.folder)}</div>
-      <div class="trip-dates">${esc(tr.subtitle || '')}</div>
+      <div class="trip-name">${esc(r.title)}</div>
+      <div class="trip-dates">${esc(r.subtitle)}</div>
       <div class="trip-meta">${meta}</div>
       ${est === 'pendiente' ? '' : `<div class="mini-bar"><span style="width:${pct}%;background:${th.vars['--accent']}"></span></div>`}
     </div></button>`;
@@ -686,6 +727,14 @@ async function showLibrary() {
   }
   el('btn-root').textContent = '📁 ' + rootHandle.name;
   el('btn-root').classList.add('connected');
+
+  if (!tripHandles.length && escaneando) {
+    el('app').innerHTML = `<div class="library">
+      <div class="lib-title">Bitácoras</div>
+      ${tabs('viajes')}
+      <div class="lib-sub">Buscando viajes en ${esc(rootHandle.name)}…</div></div>`;
+    return;
+  }
 
   if (!tripHandles.length) {
     el('app').innerHTML = `<div class="library">
@@ -717,24 +766,69 @@ async function showLibrary() {
   el('app').innerHTML = `<div class="library">
     <div class="lib-title">Bitácoras</div>
     ${tabs('viajes')}
-    <div class="lib-sub">${tripHandles.length} viaje${tripHandles.length > 1 ? 's' : ''} en ${esc(rootHandle.name)} · <a href="#" onclick="refreshLibrary();return false" style="color:#a8cce0">actualizar</a></div>
+    <div class="lib-sub">${tripHandles.length} viaje${tripHandles.length > 1 ? 's' : ''} en ${esc(rootHandle.name)}${escaneando ? ' · buscando…' : ''} · <a href="#" onclick="refreshLibrary();return false" style="color:#a8cce0">actualizar</a></div>
     <button class="tb-btn primary big" onclick="newAlbumTrip()">🏖️ Nuevo viaje de vacaciones</button>
     ${grupos}</div>`;
 
-  // portadas
-  tripHandles.forEach(async (t, i) => {
-    const cover = t.data.trip?.coverImage;
-    if (!cover) return;
-    try {
-      const fh = await t.handle.getFileHandle(cover);
-      const url = URL.createObjectURL(await fh.getFile());
-      const box = el('cover-' + i);
-      if (box) box.insertAdjacentHTML('afterbegin', `<img src="${url}" alt="">`);
-    } catch (_) {}
-  });
+  observaPortadas();
 }
 
-async function refreshLibrary() { if (rootHandle) { await scanTrips(); showLibrary(); } }
+// Las portadas son fotos enteras: se leen solo las de los viajes que se ven y se
+// guardan en la caché de miniaturas, para que la próxima vez no haya que leerlas.
+function observaPortadas() {
+  const huecos = document.querySelectorAll('.trip-cover[data-cover]');
+  const pide = async nodo => {
+    const { cover, carpeta } = nodo.dataset;
+    nodo.removeAttribute('data-cover');
+    try {
+      let src = portadaUrls[carpeta] || await cacheGet(cover, carpeta);
+      if (!src) {
+        const dir = await rootHandle.getDirectoryHandle(carpeta);
+        const file = await enCola(() => dir.getFileHandle(cover).then(fh => fh.getFile()));
+        const m = thumbSize(false);
+        const thumb = await compressImage(file, m, m, thumbQuality());
+        src = URL.createObjectURL(thumb);
+        await cacheSet(cover, thumb, carpeta);
+      }
+      portadaUrls[carpeta] = src;
+      if (nodo.isConnected) nodo.insertAdjacentHTML('afterbegin', `<img src="${src}" alt="">`);
+    } catch (_) { /* sin portada: se queda el icono del tema */ }
+  };
+  if (!('IntersectionObserver' in window)) { huecos.forEach(pide); return; }
+  const obs = new IntersectionObserver(entradas => {
+    for (const e of entradas) {
+      if (!e.isIntersecting) continue;
+      obs.unobserve(e.target);
+      pide(e.target);
+    }
+  }, { rootMargin: '300px' });
+  huecos.forEach(n => obs.observe(n));
+}
+
+// La tarjeta lleva la carpeta y no un índice: mientras se escanea, la lista
+// cambia de orden bajo los pies y un número apuntaría a otro viaje.
+async function abreViaje(folder) {
+  const i = tripHandles.findIndex(t => t.folder === folder);
+  if (i < 0) { status('No encuentro ese viaje. Pulsa Actualizar.', true); return; }
+  const t = tripHandles[i];
+  try {
+    if (!t.handle) t.handle = await rootHandle.getDirectoryHandle(folder);
+    if (!t.data) {
+      status('Abriendo…');
+      t.data = JSON.parse(await (await (await t.handle.getFileHandle('bitacora.json')).getFile()).text());
+      t.resumen = resumenViaje(t.data, folder);
+      t.status = tripStatus(t.data);
+    }
+  } catch (e) { status('No se pudo abrir el viaje: ' + e.message, true); return; }
+  openTrip(i);
+}
+
+async function refreshLibrary() {
+  if (!rootHandle) return;
+  tripHandles = [];
+  showLibrary();
+  await scanTrips(showLibrary);
+}
 
 
 /* ══════════════════════════════════════════════════════════
@@ -3807,7 +3901,10 @@ window.addEventListener('unhandledrejection', e => {
   if (saved) {
     try {
       if (await saved.queryPermission({ mode: 'readwrite' }) === 'granted') {
-        rootHandle = saved; await scanTrips();
+        rootHandle = saved;
+        await indiceGuardado();          // la biblioteca de la última vez, al instante
+        escaneando = true;               // ...y se relee la carpeta por detrás
+        setTimeout(() => scanTrips(() => { if (pantallaActual.v === 'viajes') showLibrary(); }), 0);
       } else {
         el('btn-root').textContent = '📁 Reconectar ' + saved.name;
         el('btn-root').removeAttribute('onclick');
@@ -3817,9 +3914,11 @@ window.addEventListener('unhandledrejection', e => {
           let ok = false;
           try { ok = await ensurePermission(saved); } catch (_) {} finally { pickerBusy = false; }
           if (ok) {
-            rootHandle = saved; await scanTrips();
+            rootHandle = saved;
             el('btn-root').onclick = pickRoot;
+            await indiceGuardado();
             showLibrary();
+            scanTrips(() => { if (pantallaActual.v === 'viajes') showLibrary(); });
           } else {
             status('Permiso no concedido. Pulsa otra vez para elegir la carpeta a mano.', true);
             el('btn-root').textContent = '📁 Elegir carpeta';

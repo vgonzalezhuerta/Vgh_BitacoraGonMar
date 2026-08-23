@@ -65,6 +65,11 @@ Bloques principales, en orden dentro del `<script>`:
   se está en la raíz se mantiene **una** entrada de historial, que es la que recoge el toque. Toda pantalla
   nueva tiene que llamar a `marcaPantalla()` y entrar en `PADRE`, o atrás se saltará un escalón.
 - **Escaneo** — `pickRoot()`, `scanTrips()`. `pickerBusy` impide dos selectores a la vez (Chrome falla).
+  El arranque no espera al escaneo: `indiceGuardado()` pinta la biblioteca con el índice de la última visita
+  (`resumenViaje()` por viaje, guardado en IndexedDB) y `scanTrips()` relee la carpeta por detrás, de dos en dos,
+  llamando a `alPintar` con cada viaje que encuentra. Por eso las tarjetas se dibujan desde `t.resumen` y no
+  desde `t.data`, que puede no estar todavía: `abreViaje(carpeta)` lee ese `bitacora.json` en el momento de
+  abrirlo. Las tarjetas llevan la carpeta y no un índice, porque mientras se escanea la lista se reordena.
 - **Biblioteca y momentos** — `showLibrary()`, `showMoments()`, formulario de momentos.
 - **Caché de miniaturas** — `cacheInit()` detecta si hay IndexedDB (solo por `https`) o cae a
   `localStorage` (necesario en `file://`). `thumbSize()` y `thumbQuality()` aprietan más en localStorage.
