@@ -1578,16 +1578,7 @@ async function importKeep() {
     impArchivos = new Map();
     impUbic = null;
     const jsons = [];
-    for await (const entry of dir.values()) {
-      if (entry.kind !== 'file') continue;
-      if (/\.json$/i.test(entry.name)) {
-        if (entry.name === 'ubicaciones.json') {
-          try { impUbic = JSON.parse(await (await entry.getFile()).text()); }
-          catch (_) { status('El ubicaciones.json de esa carpeta está mal formado y se ignora', true); }
-        } else if (entry.name !== 'cervezas.json') jsons.push(entry);
-      }
-      else if (/\.(jpe?g|png|gif|webp|heic)$/i.test(entry.name)) impArchivos.set(claveArchivo(entry.name), entry);
-    }
+    await recorreKeep(dir, jsons, 0);
     if (!jsons.length) {
       status('En esa carpeta no hay notas de Keep. Elige la carpeta "Keep" del export de Takeout.', true); return;
     }
@@ -1607,6 +1598,26 @@ async function importKeep() {
     impSel = new Set(suenan.length ? suenan : (todas.length === 1 ? todas : []));
     renderImportPanel();
   } catch (e) { status('Fallo leyendo el export de Keep: ' + e.message, true); }
+}
+
+// Un export grande de Takeout viene partido en varios zips y las notas pueden
+// quedar en subcarpetas, así que se recorre todo lo que cuelgue de la elegida:
+// así vale también apuntar directamente a la carpeta Takeout entera.
+async function recorreKeep(dir, jsons, prof) {
+  for await (const entry of dir.values()) {
+    if (entry.kind === 'directory') {
+      if (prof < 3) await recorreKeep(entry, jsons, prof + 1);
+      continue;
+    }
+    if (/\.json$/i.test(entry.name)) {
+      if (entry.name === 'ubicaciones.json') {
+        try { impUbic = JSON.parse(await (await entry.getFile()).text()); }
+        catch (_) { status('El ubicaciones.json de esa carpeta está mal formado y se ignora', true); }
+      } else if (entry.name !== 'cervezas.json') jsons.push(entry);
+    } else if (/\.(jpe?g|png|gif|webp|heic)$/i.test(entry.name)) {
+      impArchivos.set(claveArchivo(entry.name), entry);
+    }
+  }
 }
 
 function notaDeKeep(j, archivo) {
@@ -1647,10 +1658,16 @@ function toggleImpEtiqueta(i) {
   renderImportPanel();
 }
 
+function marcaTodasEtiquetas(todas) {
+  impSel = new Set(todas ? etiquetasDeNotas().map(e => e.nombre) : []);
+  renderImportPanel();
+}
+
 function renderImportPanel() {
   marcaPantalla({ v: 'importar' });
   const etiquetas = etiquetasDeNotas();
   const elegidas = notasElegidas();
+  const fuera = impNotas.length - elegidas.length;
   const yaEstan = new Set(B.beers.map(b => b.source).filter(Boolean));
   const nuevas = elegidas.filter(n => !yaEstan.has('keep:' + n.archivo));
   const repes = elegidas.length - nuevas.length;
@@ -1671,6 +1688,11 @@ function renderImportPanel() {
       <p style="font-size:.88rem">Marca las etiquetas de las notas de cerveza. Lo que no marques se queda fuera.</p>
       <div class="imp-chips">${etiquetas.map((e, i) =>
         `<button class="${impSel.has(e.nombre) ? 'on' : ''}" onclick="toggleImpEtiqueta(${i})">${esc(e.nombre)} · ${e.n}</button>`).join('')}</div>
+      <div class="row">
+        <button class="tb-btn" onclick="marcaTodasEtiquetas(true)">Marcar todas</button>
+        <button class="tb-btn" onclick="marcaTodasEtiquetas(false)">Ninguna</button>
+        <span class="muted">${elegidas.length} de ${impNotas.length} notas marcadas${fuera ? `, ${fuera} se quedan fuera` : ''}</span>
+      </div>
 
       <p style="font-size:.88rem"><b>${nuevas.length}</b> se importarán${repes ? `, ${repes} ya estaban y se saltan` : ''}${conFoto ? `, con ${conFoto} foto${conFoto === 1 ? '' : 's'}` : ''}.</p>
       ${muestra ? `<div style="border-top:1px solid #d9c99f;margin-top:.7rem;padding-top:.5rem">

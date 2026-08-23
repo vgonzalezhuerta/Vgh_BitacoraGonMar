@@ -134,8 +134,14 @@ descomprimir un zip—, pero desde el móvil también vale si dejas la carpeta d
 2. Descomprímelo. Dentro de `Takeout/Keep/` hay un `.json` y un `.html` por nota, y las fotos sueltas.
 3. En la app, pestaña Cervezas → **📥**, y elige esa carpeta `Keep`.
 4. La app te enseña las etiquetas que ha encontrado, con cuántas notas tiene cada una. Marca las de cerveza:
-   lo que no marques se queda fuera. Si tienes una etiqueta que se llame «Cervezas» viene marcada de entrada.
+   lo que no marques se queda fuera. Si tienes una etiqueta que se llame «Cervezas» viene marcada de entrada,
+   y debajo pone cuántas notas quedan seleccionadas y cuántas fuera. **Si el número que dice importar es mucho
+   menor que el de notas encontradas, es que tus notas de cerveza no llevan esa etiqueta:** pulsa *Marcar todas*.
 5. Al importar copia las fotos a `Cervezas/` y escribe las fichas.
+
+Vale elegir tanto la carpeta `Keep` como la `Takeout` entera: se recorren también las subcarpetas. Y si el
+export venía partido en varios zips —pasa cuando hay muchas fotos—, descomprímelos todos e impórtalos uno a
+uno: las notas repetidas se reconocen y se saltan.
 
 **El estilo y la puntuación son una propuesta.** El estilo sale del nombre de la cerveza (nunca del texto,
 donde un «parecido a una IPA» engañaría) y la puntuación, del adjetivo que usaste: «riquísima» son cinco
