@@ -1754,6 +1754,26 @@ function cervezaDeNota(n, i) {
   return c;
 }
 
+function renderImportProgreso(total) {
+  el('app').innerHTML = `<div class="library">
+    <div class="lib-title">Importando</div>
+    <div class="lib-sub" id="imp-cuenta">0 de ${total}</div>
+    <div class="panel">
+      <div class="mini-bar"><span id="imp-bar" style="width:0%;background:var(--accent)"></span></div>
+      <p style="margin-top:.8rem;font-size:.95rem" id="imp-que">Preparando…</p>
+      <p class="muted">Cada cerveza trae sus fotos y hay que copiarlas una a una, así que esto tarda
+        varios minutos. Deja la app abierta y en primer plano.</p>
+      <p class="muted">Si se corta, vuelve a importar: sigue por donde se quedó y no duplica nada.</p>
+    </div></div>`;
+}
+
+function pintaImportProgreso(hechas, total, texto) {
+  const cuenta = el('imp-cuenta'), barra = el('imp-bar'), que = el('imp-que');
+  if (cuenta) cuenta.textContent = `${hechas} de ${total}`;
+  if (barra) barra.style.width = Math.round(hechas / total * 100) + '%';
+  if (que) que.textContent = texto;
+}
+
 async function runImport() {
   const yaEstan = new Set(B.beers.map(b => b.source).filter(Boolean));
   const nuevas = notasElegidas().filter(n => !yaEstan.has('keep:' + n.archivo));
@@ -1764,12 +1784,14 @@ async function runImport() {
   // congela la pestaña y la importación se queda a medias.
   let despierta = null;
   try { despierta = await navigator.wakeLock.request('screen'); } catch (_) {}
+  renderImportProgreso(nuevas.length);
 
   let fotosOk = 0, fotosNo = 0;
   for (let i = 0; i < nuevas.length; i++) {
     const n = nuevas[i];
     const c = cervezaDeNota(n, i);
-    status(`Importando ${i + 1} de ${nuevas.length}: ${c.name}${n.fotos.length ? ` (${n.fotos.length} fotos)` : ''}`);
+    pintaImportProgreso(i, nuevas.length,
+      `${c.name}${n.fotos.length ? ` — copiando ${n.fotos.length} foto${n.fotos.length === 1 ? '' : 's'}` : ''}`);
     const copiadas = [];
     for (let f = 0; f < n.fotos.length; f++) {
       const handle = impArchivos.get(claveArchivo(n.fotos[f]));
@@ -1789,6 +1811,7 @@ async function runImport() {
     // volver a importar sigue por donde se quedó, porque cada ficha recuerda su nota
     if (i % 10 === 9) await saveBeers();
   }
+  pintaImportProgreso(nuevas.length, nuevas.length, 'Guardando…');
   if (despierta) { try { await despierta.release(); } catch (_) {} }
   const conSitio = impUbic ? aplicaUbicaciones(impUbic, true).tocadas : 0;
   const ok = await saveBeers();
