@@ -122,6 +122,10 @@ La pestaña **🍺 Cervezas** es un cuaderno aparte, fuera de los viajes: cada c
 cervecera, estilo, sitio, país, fecha, puntuación de 0 a 5, notas y fotos. Arriba se ve cuántas llevas, de
 cuántos países y la nota media, y el buscador mira en todos los campos a la vez.
 
+Cada ficha enseña una foto de portada con un `+2` si hay más; al tocarla se abren todas en grande, con flechas
+para pasar de una a otra. Las fotos se van pidiendo según bajas por la lista, así que con muchas cervezas la
+pantalla sale al momento en vez de esperar a que estén todas.
+
 Todo se guarda en `Cervezas/cervezas.json` de tu carpeta raíz. La app crea la carpeta sola la primera vez.
 
 ### Traer las cervezas de Google Keep

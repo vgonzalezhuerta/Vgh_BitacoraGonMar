@@ -335,6 +335,11 @@ textarea:focus{outline:none;border-color:var(--accent)}
 .beer-name{font-family:var(--display);font-size:1.2rem;color:var(--panel);line-height:1.15}
 .beer-meta{font-size:.78rem;color:#7a6a52;margin-top:.15rem;display:flex;flex-wrap:wrap;gap:.15rem .6rem}
 .beer-pin{cursor:pointer;text-decoration:underline dotted}
+.beer-portada{position:relative;width:104px;aspect-ratio:1;border-radius:8px;overflow:hidden;
+  border:2px solid #d9c99f;background:#fff8ea;margin:.5rem 0}
+.beer-portada img{width:100%;height:100%;object-fit:cover;cursor:pointer}
+.beer-mas{position:absolute;right:0;bottom:0;background:rgba(0,0,0,.68);color:#fff;font-size:.72rem;
+  padding:.1rem .4rem;border-top-left-radius:6px;pointer-events:none}
 .beer-stars{color:var(--accent);font-size:.95rem;letter-spacing:.08em;margin-top:.25rem}
 .beer-stars .dim{color:#c9b98f}
 .beer-stars .guess{color:#7a6a52;font-size:.7rem;font-style:italic;letter-spacing:0;margin-left:.35rem}
@@ -355,6 +360,12 @@ textarea:focus{outline:none;border-color:var(--accent)}
 .lightbox.open{display:flex}
 .lightbox img{max-width:100%;max-height:90vh;border-radius:8px}
 .lightbox-close{position:absolute;top:1rem;right:1rem;background:#fff2;color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:1.2rem}
+.lightbox-nav{position:absolute;top:50%;transform:translateY(-50%);background:#fff2;color:#fff;border:none;
+  border-radius:50%;width:46px;height:46px;font-size:1.8rem;line-height:1}
+.lightbox-nav.prev{left:.6rem}
+.lightbox-nav.next{right:.6rem}
+.lightbox-count{position:absolute;bottom:1rem;left:50%;transform:translateX(-50%);color:#fff;
+  background:#0006;border-radius:12px;padding:.15rem .7rem;font-size:.8rem}
 
 @media(max-width:520px){
   .day-header{padding:.6rem}
@@ -386,6 +397,9 @@ textarea:focus{outline:none;border-color:var(--accent)}
 
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <button class="lightbox-nav prev" id="lb-prev" onclick="event.stopPropagation();galeriaMueve(-1)" style="display:none">‹</button>
+  <button class="lightbox-nav next" id="lb-next" onclick="event.stopPropagation();galeriaMueve(1)" style="display:none">›</button>
+  <div class="lightbox-count" id="lb-count" style="display:none"></div>
   <img id="lightbox-img" src="" alt="">
 </div>
 
@@ -1043,14 +1057,17 @@ function beerCard(b) {
     : (lugar ? `<span>${esc(lugar)}</span>` : '');
   const meta = sitio + [b.style, fmtFecha(b.datetime)]
     .filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('');
-  const rejilla = fotos.map(f => `<div class="beer-thumb" data-foto="${esc(f)}"></div>`).join('');
+  // solo la portada: pintar las tres fotos de cada ficha eran 332 archivos que leer
+  // de Drive antes de ver nada. Las demás están a un toque, en la galería.
+  const portada = fotos.length ? `<div class="beer-portada" data-foto="${esc(fotos[0])}"
+      data-galeria="${esc(b.id)}">${fotos.length > 1 ? `<span class="beer-mas">+${fotos.length - 1}</span>` : ''}</div>` : '';
   return `<div class="beer-card" id="card-${esc(b.id)}">
       <div class="beer-name">${esc(b.name)}</div>
       ${b.brewery ? `<div class="beer-meta"><span>${esc(b.brewery)}</span></div>` : ''}
       ${meta ? `<div class="beer-meta">${meta}</div>` : ''}
       ${estrellas(b)}
       ${b.notes ? `<div class="beer-notes">${esc(b.notes)}</div>` : ''}
-      ${rejilla ? `<div class="beer-photos">${rejilla}</div>` : ''}
+      ${portada}
       <div class="beer-actions">
         <button class="tb-btn" onclick="editBeer('${esc(b.id)}')">✎ Editar</button>
         <button class="tb-btn" onclick="deleteBeer('${esc(b.id)}')">🗑 Borrar</button>
@@ -1143,7 +1160,7 @@ let obrerosFoto = 0;
 function observaMiniaturas() {
   if (beerObs) { beerObs.disconnect(); beerObs = null; }
   colaFotos.length = 0;
-  const huecos = document.querySelectorAll('.beer-thumb[data-foto]');
+  const huecos = document.querySelectorAll('.beer-portada[data-foto]');
   if (!('IntersectionObserver' in window)) {   // sin soporte, como antes: todas
     huecos.forEach(n => colaFotos.push(n));
     arrancaFotos();
@@ -1161,7 +1178,7 @@ function observaMiniaturas() {
 }
 
 function arrancaFotos() {
-  while (obrerosFoto < 2 && colaFotos.length) {
+  while (obrerosFoto < 6 && colaFotos.length) {
     obrerosFoto++;
     (async () => {
       while (colaFotos.length) {
@@ -1170,7 +1187,8 @@ function arrancaFotos() {
         try {
           const src = await miniaturaCerveza(foto);
           if (src && nodo.isConnected) {
-            nodo.innerHTML = `<img src="${src}" alt="" onclick="openBeerPhoto('${esc(foto)}')">`;
+            const mas = nodo.innerHTML;
+            nodo.innerHTML = `<img src="${src}" alt="" onclick="abreGaleria('${esc(nodo.dataset.galeria)}', 0)">` + mas;
             nodo.removeAttribute('data-foto');
           }
         } catch (_) { /* una foto que no está: se deja el hueco */ }
@@ -1189,30 +1207,88 @@ function pintaCargaFotos() {
   n.textContent = quedan ? `📷 ${quedan} · ` : '';
 }
 
-// Miniatura de una foto de cerveza: de memoria, de la caché o leyéndola de la carpeta
+// Miniatura de una foto de cerveza: de memoria, de la caché o leyéndola de la carpeta.
+// La primera vez se pinta el archivo tal cual y la miniatura se prepara luego: comprimir
+// trescientas fotos antes de enseñar nada es medio minuto de móvil parado.
 async function miniaturaCerveza(foto) {
   if (beerUrls[foto]) return beerUrls[foto];
-  let src = await cacheGet(foto, 'Cervezas');
-  if (!src) {
-    try {
-      const file = await (await beerDir.getFileHandle(foto)).getFile();
-      const max = thumbSize(false);
-      const thumb = await compressImage(file, max, max, thumbQuality());
-      src = URL.createObjectURL(thumb);
-      await cacheSet(foto, thumb, 'Cervezas');
-    } catch (_) { return null; }
-  }
+  const guardada = await cacheGet(foto, 'Cervezas');
+  if (guardada) { beerUrls[foto] = guardada; return guardada; }
+  let file;
+  try { file = await enCola(() => beerDir.getFileHandle(foto).then(fh => fh.getFile())); }
+  catch (_) { return null; }
+  const src = URL.createObjectURL(file);
   beerUrls[foto] = src;
+  encolaMiniatura(foto, file);
   return src;
 }
 
-async function openBeerPhoto(file) {
+// Drive sirve los archivos de uno en uno: se dejan pasar dos a la vez como mucho,
+// aunque arriba haya más hilos pidiendo miniaturas ya cacheadas.
+let enCurso = 0;
+const esperando = [];
+function enCola(tarea) {
+  return new Promise((res, rej) => {
+    const lanza = async () => {
+      enCurso++;
+      try { res(await tarea()); } catch (e) { rej(e); }
+      finally { enCurso--; const sig = esperando.shift(); if (sig) sig(); }
+    };
+    if (enCurso < 2) lanza(); else esperando.push(lanza);
+  });
+}
+
+// Las miniaturas de verdad se cuecen cuando el móvil no tiene nada mejor que hacer,
+// para que la próxima visita salga de la caché en vez de leer la carpeta entera.
+const pendientesMini = [];
+let cociendo = false;
+function encolaMiniatura(foto, file) {
+  pendientesMini.push([foto, file]);
+  if (cociendo) return;
+  cociendo = true;
+  const cuece = async () => {
+    const par = pendientesMini.shift();
+    if (!par) { cociendo = false; return; }
+    try {
+      const thumb = await compressImage(par[1], 360, 360, 0.7);
+      await cacheSet(par[0], thumb, 'Cervezas');
+    } catch (_) {}
+    const luego = window.requestIdleCallback || (f => setTimeout(f, 200));
+    luego(cuece);
+  };
+  (window.requestIdleCallback || (f => setTimeout(f, 200)))(cuece);
+}
+
+let galeria = null;   // { fotos, i } de la cerveza abierta
+
+function abreGaleria(id, i) {
+  const b = B.beers.find(x => x.id === id);
+  if (!b || !(b.photos || []).length) return;
+  galeria = { fotos: b.photos.slice(), i: i || 0 };
+  el('lightbox').classList.add('open');
+  pintaGaleria();
+}
+
+function galeriaMueve(paso) {
+  if (!galeria) return;
+  galeria.i = (galeria.i + paso + galeria.fotos.length) % galeria.fotos.length;
+  pintaGaleria();
+}
+
+async function pintaGaleria() {
+  if (!galeria) return;
+  const { fotos, i } = galeria;
+  const file = fotos[i];
   const img = el('lightbox-img');
   img.src = beerUrls[file] || '';
-  el('lightbox').classList.add('open');
+  const varias = fotos.length > 1;
+  el('lb-prev').style.display = el('lb-next').style.display = varias ? '' : 'none';
+  el('lb-count').style.display = varias ? '' : 'none';
+  el('lb-count').textContent = `${i + 1} / ${fotos.length}`;
   try {
     const full = URL.createObjectURL(await (await beerDir.getFileHandle(file)).getFile());
-    if (el('lightbox').classList.contains('open')) img.src = full;
+    // mientras se leía se puede haber cerrado o pasado a otra
+    if (galeria && galeria.fotos[galeria.i] === file && el('lightbox').classList.contains('open')) img.src = full;
   } catch (_) {}
 }
 
@@ -3081,7 +3157,11 @@ async function openLightbox(key) {
   try { const full = await loadFull(key); if (full && el('lightbox').classList.contains('open')) img.src = full; }
   catch (_) { /* se queda la miniatura */ }
 }
-function closeLightbox() { el('lightbox').classList.remove('open'); }
+function closeLightbox() {
+  el('lightbox').classList.remove('open');
+  galeria = null;
+  ['lb-prev', 'lb-next', 'lb-count'].forEach(id => { const n = el(id); if (n) n.style.display = 'none'; });
+}
 
 /* ─── GUARDADO ─── */
 async function save() {
