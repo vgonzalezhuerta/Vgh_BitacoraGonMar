@@ -74,7 +74,8 @@ Bloques principales, en orden dentro del `<script>`:
 - **Cervezas** — `showBeers()`, `renderBeerList()`, formulario y `importKeep()`: las cervezas probadas por el
   mundo, en `Cervezas/cervezas.json`. Cada una lleva `name`, `brewery`, `style`, `place`, `city`, `country`,
   `datetime`, `rating` (0–5), `notes`, `photos` (todas se pintan en la ficha: enseñar solo la primera dejaba
-  las demás inalcanzables) y, opcional, `lat`/`lng`. El mapa de la lista (`initBeerMap()`)
+  las demás inalcanzables, y `observaMiniaturas()` solo lee las que entran en pantalla, que con ciento y pico
+  cervezas son varios cientos de archivos) y, opcional, `lat`/`lng`. El mapa de la lista (`initBeerMap()`)
   sigue al buscador; el del formulario (`initBeerFormMap()`) es de una sola cerveza y cualquier toque mueve su
   marcador. Los dos van con `zoomAnimation: false`: al cambiar de pantalla se destruye el mapa y una animación
   de zoom en vuelo revienta al terminar sobre un contenedor que ya no existe. `aplicaUbicaciones()` vuelca un

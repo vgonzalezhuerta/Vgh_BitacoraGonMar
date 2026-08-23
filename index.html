@@ -1043,7 +1043,7 @@ function beerCard(b) {
     : (lugar ? `<span>${esc(lugar)}</span>` : '');
   const meta = sitio + [b.style, fmtFecha(b.datetime)]
     .filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('');
-  const rejilla = fotos.map(f => `<div class="beer-thumb" id="bt-${esc(b.id)}-${esc(f)}"></div>`).join('');
+  const rejilla = fotos.map(f => `<div class="beer-thumb" data-foto="${esc(f)}"></div>`).join('');
   return `<div class="beer-card" id="card-${esc(b.id)}">
       <div class="beer-name">${esc(b.name)}</div>
       ${b.brewery ? `<div class="beer-meta"><span>${esc(b.brewery)}</span></div>` : ''}
@@ -1119,7 +1119,7 @@ async function renderBeerList() {
   const punt = B.beers.filter(b => Number(b.rating) > 0);
   const media = punt.length ? punt.reduce((s, b) => s + Number(b.rating), 0) / punt.length : 0;
   const cuenta = el('beer-count');
-  if (cuenta) cuenta.innerHTML = esc([
+  if (cuenta) cuenta.innerHTML = '<span id="beer-cargando"></span>' + esc([
     q ? `${lista.length} de ${B.beers.length} cervezas` : `${B.beers.length} cerveza${B.beers.length === 1 ? '' : 's'}`,
     paises.size ? `${paises.size} paí${paises.size === 1 ? 's' : 'ses'}` : '',
     media ? `media ${media.toFixed(1).replace('.', ',')}` : ''
@@ -1129,14 +1129,64 @@ async function renderBeerList() {
     : '<div class="lib-empty"><h2>Nada con esa búsqueda</h2><p>Prueba con otra palabra.</p></div>';
   beerVisibles = lista;
   refreshBeerMarkers();
+  observaMiniaturas();
+}
 
-  for (const b of lista) for (const foto of (b.photos || [])) {
-    const box = el(`bt-${b.id}-${foto}`);
-    if (!box) continue;
-    const src = await miniaturaCerveza(foto);
-    if (!src) continue;
-    box.innerHTML = `<img src="${src}" alt="" loading="lazy" onclick="openBeerPhoto('${esc(foto)}')">`;
+/* ─── MINIATURAS ─── */
+// Con ciento y pico cervezas son varios cientos de fotos: leerlas todas al entrar
+// dejaba la pestaña minutos en blanco, incluso con la caché llena. Se piden solo
+// las que van entrando en pantalla, y de dos en dos porque Drive no da para más.
+let beerObs = null;
+const colaFotos = [];
+let obrerosFoto = 0;
+
+function observaMiniaturas() {
+  if (beerObs) { beerObs.disconnect(); beerObs = null; }
+  colaFotos.length = 0;
+  const huecos = document.querySelectorAll('.beer-thumb[data-foto]');
+  if (!('IntersectionObserver' in window)) {   // sin soporte, como antes: todas
+    huecos.forEach(n => colaFotos.push(n));
+    arrancaFotos();
+    return;
   }
+  beerObs = new IntersectionObserver(entradas => {
+    for (const e of entradas) {
+      if (!e.isIntersecting) continue;
+      beerObs.unobserve(e.target);
+      colaFotos.push(e.target);
+    }
+    arrancaFotos();
+  }, { rootMargin: '400px' });     // se adelanta una pantalla al desplazarse
+  huecos.forEach(n => beerObs.observe(n));
+}
+
+function arrancaFotos() {
+  while (obrerosFoto < 2 && colaFotos.length) {
+    obrerosFoto++;
+    (async () => {
+      while (colaFotos.length) {
+        const nodo = colaFotos.shift();
+        const foto = nodo.dataset.foto;
+        try {
+          const src = await miniaturaCerveza(foto);
+          if (src && nodo.isConnected) {
+            nodo.innerHTML = `<img src="${src}" alt="" onclick="openBeerPhoto('${esc(foto)}')">`;
+            nodo.removeAttribute('data-foto');
+          }
+        } catch (_) { /* una foto que no está: se deja el hueco */ }
+        pintaCargaFotos();
+      }
+      obrerosFoto--;
+      pintaCargaFotos();
+    })();
+  }
+}
+
+function pintaCargaFotos() {
+  const n = el('beer-cargando');
+  if (!n) return;
+  const quedan = colaFotos.length + obrerosFoto;
+  n.textContent = quedan ? `📷 ${quedan} · ` : '';
 }
 
 // Miniatura de una foto de cerveza: de memoria, de la caché o leyéndola de la carpeta
