@@ -224,7 +224,7 @@ encuentres, no para producirlos.
   "entries": [
     {
       "id": "e1751210400000",
-      "date": "2026-07-03",
+      "date": "2026-07-03",           // opcional: vacía si se repite a diario o varias veces
       "title": "El parque de atracciones",
       "text": "Lucas se subió dos veces a la montaña rusa.",
       "lat": 36.51,                   // opcional, si se marcó el sitio

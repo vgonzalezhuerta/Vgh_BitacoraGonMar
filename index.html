@@ -251,6 +251,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
   font-weight:400;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 /* mientras se espera el toque en el mapa */
 #leaflet-map.picking{outline:3px solid var(--accent);cursor:crosshair}
+#leaflet-map.mundi{height:min(68vh,560px)}
 
 /* ───── RECUERDO ───── */
 .recu-fondo{position:fixed;inset:0;background:rgba(4,14,26,.88);z-index:90;display:flex;align-items:center;
@@ -508,7 +509,7 @@ async function ensurePermission(handle, mode = 'readwrite') {
 // un escalón (formulario → su lista → viajes). Desde viajes ya sí cierra.
 let pantallaActual = { v: 'viajes' };
 const PADRE = { 'cerveza-form': 'cervezas', 'importar': 'cervezas', 'momento-form': 'momentos',
-  'cervezas': 'viajes', 'momentos': 'viajes', 'viaje': 'viajes' };
+  'cervezas': 'viajes', 'momentos': 'viajes', 'viaje': 'viajes', 'mundi': 'viajes' };
 
 function marcaPantalla(v) {
   pantallaActual = v;
@@ -600,7 +601,24 @@ function resumenViaje(data, folder) {
   const r = { folder, title: tr.title || folder, subtitle: tr.subtitle || '', theme: tr.theme || '',
     startDate: tr.startDate || '', cover: tr.coverImage || '', album: esAlbum(data),
     dias: days.length, vis: (data.visited || []).filter(Boolean).length,
-    objetivos: 0, caught: 0, pts: 0, max: 0, tarjetas: 0, fotos: 0 };
+    objetivos: 0, caught: 0, pts: 0, max: 0, tarjetas: 0, fotos: 0, puntos: [] };
+
+  // Los sitios del viaje viajan en el resumen: el mapamundi se pinta del índice,
+  // sin abrir un solo bitacora.json.
+  days.forEach((d, i) => {
+    if (d.map && d.map.lat != null) r.puntos.push({ lat: d.map.lat, lng: d.map.lng, k: 'dia', ref: i, t: d.title || ('Día ' + (i + 1)) });
+  });
+  (data.entries || []).forEach(e => {
+    if (e.lat != null) r.puntos.push({ lat: e.lat, lng: e.lng, k: 'tarjeta', ref: e.id, t: e.title || 'Una tarjeta' });
+  });
+  Object.entries(data.moments || {}).forEach(([día, lista]) => (lista || []).forEach(m => {
+    if (m.lat != null) r.puntos.push({ lat: m.lat, lng: m.lng, k: 'momento', ref: +día, t: m.place || (m.text || '').slice(0, 40) || 'Un momento' });
+  }));
+  if (r.puntos.length > 80) r.puntos = r.puntos.slice(0, 80);   // el índice no debe engordar
+  if (r.puntos.length) {
+    r.centro = { lat: +(r.puntos.reduce((s, p) => s + p.lat, 0) / r.puntos.length).toFixed(6),
+                 lng: +(r.puntos.reduce((s, p) => s + p.lng, 0) / r.puntos.length).toFixed(6) };
+  }
   if (r.album) {
     const es = data.entries || [];
     r.tarjetas = es.length;
@@ -614,7 +632,7 @@ function resumenViaje(data, folder) {
   return r;
 }
 
-const claveIndice = () => 'indice:' + (rootHandle ? rootHandle.name : '');
+const claveIndice = () => 'indice2:' + (rootHandle ? rootHandle.name : '');
 const ordenaViajes = lista => lista.sort((a, b) => {
   if (ORDEN[a.status] !== ORDEN[b.status]) return ORDEN[a.status] - ORDEN[b.status];
   const da = a.resumen.startDate, db = b.resumen.startDate;
@@ -660,6 +678,95 @@ async function scanTrips(alPintar) {
     idbSet('h', claveIndice(), tripHandles.map(t => ({ ...t.resumen, status: t.status }))).catch(() => {});
   } finally { escaneando = false; }
   if (alPintar) alPintar();
+}
+
+/* ─── PANTALLA: MAPAMUNDI ─── */
+// Todos los viajes en un mapa. Se pinta del índice, así que no abre ningún
+// bitacora.json: los sitios ya vienen en el resumen de cada viaje.
+let mundiViajes = [];        // copia congelada: el escaneo de fondo reordena tripHandles
+let mundiModo = 'viajes';    // 'viajes' = un punto por viaje · 'puntos' = todos
+
+function showWorldMap() {
+  if (!rootHandle) { showLibrary(); return; }
+  tripDir = null; D = null;
+  marcaPantalla({ v: 'mundi' });
+  applyTheme('crucero');
+  el('btn-pdf').style.display = el('btn-zip').style.display = el('btn-recuerdo').style.display = 'none';
+  el('btn-library').style.display = '';
+  el('score-bar').style.display = 'none';
+
+  mundiViajes = tripHandles.filter(t => (t.resumen.puntos || []).length);
+  const sitios = mundiViajes.reduce((n, t) => n + t.resumen.puntos.length, 0);
+  const chip = (id, txt) => `<button class="${mundiModo === id ? 'on' : ''}" onclick="mundiCambia('${id}')">${txt}</button>`;
+
+  el('app').innerHTML = `<div class="library">
+    <div class="lib-title">Mapamundi</div>
+    <div class="lib-sub">${mundiViajes.length} viaje${mundiViajes.length === 1 ? '' : 's'} · ${sitios} sitio${sitios === 1 ? '' : 's'}</div>
+    <div class="imp-chips" style="justify-content:center">
+      ${chip('viajes', '📍 Un punto por viaje')}${chip('puntos', '✨ Todos los sitios')}
+    </div>
+    ${sitios ? `<div class="panel"><div id="leaflet-map" class="mundi"></div>
+      <div class="map-hint">Toca un marcador para abrir su viaje.</div></div>`
+      : `<div class="lib-empty"><h2>Todavía no hay nada que colocar</h2>
+          <p>Los viajes salen aquí en cuanto alguno tenga paradas con mapa, tarjetas con sitio o momentos con ubicación.</p></div>`}
+    <button class="tb-btn" onclick="showLibrary()">← Volver a mis viajes</button></div>`;
+
+  if (sitios) initWorldMap();
+}
+
+function mundiCambia(modo) { mundiModo = modo; showWorldMap(); }
+
+function irAlPunto(ti, pi) {
+  const t = mundiViajes[ti];
+  if (!t) return;
+  const p = pi == null ? null : (t.resumen.puntos || [])[pi];
+  abreViaje(t.folder, p ? { k: p.k, ref: p.ref } : null);
+}
+
+const ICONO_PUNTO = { dia: '📍', tarjeta: '📸', momento: '✨' };
+
+function initWorldMap() {
+  if (!conMapa(initWorldMap)) return;
+  if (mapObj) { try { mapObj.remove(); } catch (_) {} mapObj = null; }
+  beerMapOn = false;
+  mapObj = L.map('leaflet-map', { center: [20, 0], zoom: 2, zoomAnimation: false, worldCopyJump: true });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(mapObj);
+  momentLayer = L.layerGroup().addTo(mapObj);
+
+  const todos = [];
+  mundiViajes.forEach((t, ti) => {
+    const r = t.resumen, th = THEMES[r.theme] || THEMES.crucero;
+    const color = th.vars['--accent'];
+    const bola = (tam, dentro) => L.divIcon({ className: '', iconSize: [tam, tam], iconAnchor: [tam / 2, tam / 2],
+      html: `<div style="background:${color};width:${tam}px;height:${tam}px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-size:${Math.round(tam / 2)}px">${dentro}</div>` });
+
+    if (mundiModo === 'viajes') {
+      if (!r.centro) return;
+      todos.push([r.centro.lat, r.centro.lng]);
+      L.marker([r.centro.lat, r.centro.lng], { icon: bola(34, th.icon) })
+        .bindPopup(`<div style="font-family:Lato,sans-serif;min-width:160px">
+          <div style="font-weight:900">${esc(r.title)}</div>
+          ${r.subtitle ? `<div style="font-size:.76rem;color:#777">${esc(r.subtitle)}</div>` : ''}
+          <div style="font-size:.74rem;color:#777">${r.puntos.length} sitio${r.puntos.length === 1 ? '' : 's'}</div>
+          <button onclick="irAlPunto(${ti})" style="margin-top:6px;font-size:.75rem">Abrir el viaje</button>
+        </div>`, { maxWidth: 240 }).addTo(momentLayer);
+      return;
+    }
+
+    r.puntos.forEach((p, pi) => {
+      todos.push([p.lat, p.lng]);
+      L.marker([p.lat, p.lng], { icon: bola(26, ICONO_PUNTO[p.k] || '📍') })
+        .bindPopup(`<div style="font-family:Lato,sans-serif;min-width:160px">
+          <div style="font-weight:900">${esc(p.t)}</div>
+          <div style="font-size:.74rem;color:#777">${esc(r.title)}</div>
+          <button onclick="irAlPunto(${ti}, ${pi})" style="margin-top:6px;font-size:.75rem">Ir ahí</button>
+        </div>`, { maxWidth: 240 }).addTo(momentLayer);
+    });
+  });
+
+  if (todos.length > 1) mapObj.fitBounds(todos, { padding: [30, 30], maxZoom: 12, animate: false });
+  else if (todos.length) mapObj.setView(todos[0], 9, { animate: false });
+  setTimeout(() => { if (mapObj) mapObj.invalidateSize(); }, 300);
 }
 
 /* ─── PANTALLA: BIBLIOTECA ─── */
@@ -767,7 +874,10 @@ async function showLibrary() {
     <div class="lib-title">Bitácoras</div>
     ${tabs('viajes')}
     <div class="lib-sub">${tripHandles.length} viaje${tripHandles.length > 1 ? 's' : ''} en ${esc(rootHandle.name)}${escaneando ? ' · buscando…' : ''} · <a href="#" onclick="refreshLibrary();return false" style="color:#a8cce0">actualizar</a></div>
-    <button class="tb-btn primary big" onclick="newAlbumTrip()">🏖️ Nuevo viaje de vacaciones</button>
+    <div class="row" style="justify-content:center;margin-bottom:1.2rem">
+      <button class="tb-btn primary" onclick="newAlbumTrip()">🏖️ Nuevo viaje de vacaciones</button>
+      ${tripHandles.some(t => (t.resumen.puntos || []).length) ? '<button class="tb-btn" onclick="showWorldMap()">🌍 Mapamundi</button>' : ''}
+    </div>
     ${grupos}</div>`;
 
   observaPortadas();
@@ -807,7 +917,7 @@ function observaPortadas() {
 
 // La tarjeta lleva la carpeta y no un índice: mientras se escanea, la lista
 // cambia de orden bajo los pies y un número apuntaría a otro viaje.
-async function abreViaje(folder) {
+async function abreViaje(folder, destino) {
   const i = tripHandles.findIndex(t => t.folder === folder);
   if (i < 0) { status('No encuentro ese viaje. Pulsa Actualizar.', true); return; }
   const t = tripHandles[i];
@@ -820,7 +930,13 @@ async function abreViaje(folder) {
       t.status = tripStatus(t.data);
     }
   } catch (e) { status('No se pudo abrir el viaje: ' + e.message, true); return; }
-  openTrip(i);
+  await openTrip(i);
+  if (!destino) return;
+  // el viaje acaba de pintarse: se deja respirar antes de saltar al sitio
+  setTimeout(() => {
+    if (destino.k === 'tarjeta') goToEntry(destino.ref);
+    else goToDay(Number(destino.ref));
+  }, 250);
 }
 
 async function refreshLibrary() {
@@ -3029,7 +3145,7 @@ function renderAlbumList() {
     return `<div class="alb-card" id="ac-${esc(e.id)}">
       <div class="alb-head">
         <div class="alb-title">${esc(e.title || 'Sin título')}</div>
-        <div class="alb-date">${esc(fmtDay(e.date))}</div>
+        ${e.date ? `<div class="alb-date">${esc(fmtDay(e.date))}</div>` : ''}
       </div>
       ${e.text ? `<div class="alb-text">${esc(e.text)}</div>` : ''}
       ${e.lat != null ? `<div class="dm-coord">🗺️ ${e.lat.toFixed(4)}, ${e.lng.toFixed(4)}</div>` : ''}
@@ -3055,8 +3171,9 @@ function albumForm() {
   return `<div class="alb-card dm-form">
     <label class="fld">Título
       <input type="text" id="alb-title" value="${esc(e.title || '')}" placeholder="El parque de atracciones"></label>
-    <label class="fld">Fecha
-      <input type="date" id="alb-date" value="${esc(e.date || '')}"></label>
+    <label class="fld">Fecha <span class="muted">(opcional)</span>
+      <input type="date" id="alb-date" value="${esc(e.date || '')}">
+      <span class="muted">Déjala vacía si es algo de todos los días o que repetisteis varias veces.</span></label>
     <label class="fld">¿Qué tal fue?
       <textarea id="alb-text" placeholder="La reseña del día…">${esc(e.text || '')}</textarea></label>
     <div class="fld">Dónde
@@ -3084,7 +3201,7 @@ function syncEntryDraft() {
 }
 
 function newEntry() {
-  albumDraft = { id: 'e' + Date.now(), date: hoyISO(), title: '', text: '', photos: [] };
+  albumDraft = { id: 'e' + Date.now(), date: '', title: '', text: '', photos: [] };
   renderAlbumList();
 }
 
@@ -3232,7 +3349,7 @@ function refreshAlbumMarkers() {
       .bindPopup(`<div style="font-family:Lato,sans-serif;min-width:150px">
         ${foto ? `<img src="${urls[momKey(foto)]}" style="width:100%;height:84px;object-fit:cover;border-radius:6px;margin-bottom:5px">` : ''}
         <div style="font-weight:900">${esc(e.title || '')}</div>
-        <div style="font-size:.74rem;color:#777">${esc(fmtDay(e.date))}</div>
+        ${e.date ? `<div style="font-size:.74rem;color:#777">${esc(fmtDay(e.date))}</div>` : ''}
         <button onclick="goToEntry('${esc(e.id)}')" style="margin-top:6px;font-size:.75rem">Ver la tarjeta</button>
       </div>`, { maxWidth: 230 }))
       .addTo(momentLayer);
@@ -3427,7 +3544,7 @@ function cuerpoRecuerdo(imgs) {
 
   tarjetas.forEach(e => {
     const fotos = (e.photos || []).filter(f => imgs[momKey(f)]);
-    body += `<section class="day"><div class="eyebrow">${esc(fmtDay(e.date))}</div>
+    body += `<section class="day">${e.date ? `<div class="eyebrow">${esc(fmtDay(e.date))}</div>` : ''}
       <h2>${esc(e.title || 'Sin título')}</h2>
       ${e.text ? `<p class="journal">${esc(e.text).replace(/\n/g, '<br>')}</p>` : ''}
       ${fotos.length ? `<div class="gal">${fotos.map(f => `<img src="${imgs[momKey(f)]}">`).join('')}</div>` : ''}

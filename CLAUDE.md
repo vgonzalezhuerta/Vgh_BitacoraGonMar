@@ -71,6 +71,12 @@ Bloques principales, en orden dentro del `<script>`:
   desde `t.data`, que puede no estar todavía: `abreViaje(carpeta)` lee ese `bitacora.json` en el momento de
   abrirlo. Las tarjetas llevan la carpeta y no un índice, porque mientras se escanea la lista se reordena.
 - **Biblioteca y momentos** — `showLibrary()`, `showMoments()`, formulario de momentos.
+- **Mapamundi** — `showWorldMap()`, `initWorldMap()`: todos los viajes en un mapa, con un punto por viaje (el
+  centro de sus sitios) o todos los sitios sueltos. Se pinta del índice, sin abrir ningún `bitacora.json`: los
+  puntos van en `resumen.puntos` (paradas con `map`, tarjetas con `lat`, momentos con `lat`), tope de 80 por
+  viaje para que el índice no engorde. `irAlPunto()` trabaja sobre `mundiViajes`, una copia congelada, porque el
+  escaneo de fondo reordena `tripHandles` mientras el mapa está abierto; `abreViaje(carpeta, destino)` salta al
+  día o a la tarjeta después de abrir.
 - **Caché de miniaturas** — `cacheInit()` detecta si hay IndexedDB (solo por `https`) o cae a
   `localStorage` (necesario en `file://`). `thumbSize()` y `thumbQuality()` aprietan más en localStorage.
 - **Render del viaje** — `renderTrip()`, `dayCard()`, `scoreboard()`.
@@ -95,6 +101,9 @@ Bloques principales, en orden dentro del `<script>`:
   reimportar.
 - **Viajes de vacaciones** — `esAlbum()`, `renderAlbum()`, `saveEntry()`, `createAlbumTrip()`: viajes sin
   itinerario (`trip.kind: "album"`), hechos de tarjetas en `entries`. La app crea su carpeta y su JSON.
+  La fecha de una tarjeta es opcional —hay planes que se repiten a diario o varias veces— y sin ella la tarjeta
+  se va al final de la lista y no pinta línea de fecha en ningún sitio: ni en el álbum, ni en el globo del mapa,
+  ni en el recuerdo.
   `repinta()` decide entre `renderTrip()` y `renderAlbum()`; todo lo demás (fotos, caché, ZIP, PDF) es común.
 - **Carga de imágenes** — `loadMedia()` y `readPending()`. Lee de dos en dos con 3 reintentos: Drive en
   Android sirve los archivos de uno en uno y con más concurrencia caducan.
